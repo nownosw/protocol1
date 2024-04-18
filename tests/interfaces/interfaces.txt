@@ -159,6 +159,8 @@ ITermFinanceV1LendingPositionLib.sol: TermFinanceV1LendingPositionLib.abi.json
 ITermFinanceV1LendingPositionParser.sol: TermFinanceV1LendingPositionParser.abi.json
 IPendleV2PositionLib.sol: PendleV2PositionLib.abi.json
 IPendleV2PositionParser.sol: PendleV2PositionParser.abi.json
+IMorphoBluePositionLib.sol: MorphoBluePositionLib.abi.json
+IMorphoBluePositionParser.sol: MorphoBluePositionParser.abi.json
 
 # Value interpreter
 IValueInterpreter.sol: ValueInterpreter.abi.json

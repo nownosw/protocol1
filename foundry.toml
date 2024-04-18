@@ -20,6 +20,7 @@ evm_version = "shanghai"
 remappings = [
   # Used by us directly.
   "forge-std/=lib/forge-std/src/",
+  "morpho-blue/=lib/morpho-blue/src/libraries",
   "openzeppelin-solc-0.6/=lib/openzeppelin-solc-0.6/contracts/",
   "openzeppelin-solc-0.7/=lib/openzeppelin-solc-0.7/contracts/",
   "openzeppelin-solc-0.8/=lib/openzeppelin-solc-0.8/contracts/",
