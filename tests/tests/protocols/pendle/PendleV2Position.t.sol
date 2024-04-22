@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.19;
 
-import {IAddressListRegistry as IAddressListRegistryProd} from
-    "contracts/persistent/address-list-registry/IAddressListRegistry.sol";
 import {IPendleV2Position as IPendleV2PositionProd} from
     "contracts/release/extensions/external-position-manager/external-positions/pendle-v2/IPendleV2Position.sol";
-import {IPendleV2Market as IPendleV2MarketProd} from "contracts/external-interfaces/IPendleV2Market.sol";
 import {PendleLpOracleLib} from "contracts/utils/0.8.19/pendle/adapted-libs/PendleLpOracleLib.sol";
 import {IPendleV2Market as IOracleLibPendleMarket} from
     "contracts/utils/0.8.19/pendle/adapted-libs/interfaces/IPendleV2Market.sol";
 
 import {IntegrationTest} from "tests/bases/IntegrationTest.sol";
-
 import {IERC20} from "tests/interfaces/external/IERC20.sol";
 import {IPendleV2Market} from "tests/interfaces/external/IPendleV2Market.sol";
 import {IPendleV2PrincipalToken} from "tests/interfaces/external/IPendleV2PrincipalToken.sol";
-import {IPendleV2PtOracle} from "tests/interfaces/external/IPendleV2PtOracle.sol";
+import {IPendleV2PtAndLpOracle} from "tests/interfaces/external/IPendleV2PtAndLpOracle.sol";
 import {IPendleV2StandardizedYield} from "tests/interfaces/external/IPendleV2StandardizedYield.sol";
 import {IPendleV2Router} from "tests/interfaces/external/IPendleV2Router.sol";
-
+import {IComptrollerLib} from "tests/interfaces/internal/IComptrollerLib.sol";
 import {IExternalPositionManager} from "tests/interfaces/internal/IExternalPositionManager.sol";
+import {IFundDeployer} from "tests/interfaces/internal/IFundDeployer.sol";
+import {IPendleV2MarketRegistry} from "tests/interfaces/internal/IPendleV2MarketRegistry.sol";
 import {IPendleV2PositionLib} from "tests/interfaces/internal/IPendleV2PositionLib.sol";
 import {IPendleV2PositionParser} from "tests/interfaces/internal/IPendleV2PositionParser.sol";
+import {AddressArrayLib} from "tests/utils/libs/AddressArrayLib.sol";
+import {PendleV2Utils} from "./PendleV2Utils.sol";
 
 // ETHEREUM MAINNET CONSTANTS
 address constant ETHEREUM_MARKET_FACTORY_V1 = 0x27b1dAcd74688aF24a64BD3C9C1B143118740784;
@@ -29,16 +29,16 @@ address constant ETHEREUM_MARKET_FACTORY_V3 = 0x1A6fCc85557BC4fB7B534ed835a03EF0
 address constant ETHEREUM_PT_ORACLE = 0xbbd487268A295531d299c125F3e5f749884A3e30;
 address constant ETHEREUM_ROUTER = 0x00000000005BBB0EF59571E58418F9a4357b68A0;
 address constant ETHEREUM_STETH_26DEC2025_MARKET_ADDRESS = 0xC374f7eC85F8C7DE3207a10bB1978bA104bdA3B2;
-address constant ETHEREUM_EZETH_25APR2024_MARKET_ADDRESS = 0xDe715330043799D7a80249660d1e6b61eB3713B3;
 address constant ETHEREUM_WEETH_27JUN2024_MARKET_ADDRESS = 0xF32e58F92e60f4b0A37A69b95d642A471365EAe8;
 
-uint32 constant MINIMUM_PRICING_DURATION = uint32(60 * 15); // 15 minutes
-uint32 constant MAXIMUM_PRICING_DURATION = uint32(60 * 30); // 30 minutes
 uint256 constant ORACLE_RATE_PRECISION = 1e18;
 address constant PENDLE_NATIVE_ASSET_ADDRESS = address(0);
 
-abstract contract PendleTestBase is IntegrationTest {
-    event PrincipalTokenAdded(address indexed principalToken, address indexed market);
+// TODO: Add test instance for a market that uses the native asset as its oracle rate asset
+abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
+    using AddressArrayLib for address[];
+
+    event PrincipalTokenAdded(address indexed principalToken);
 
     event PrincipalTokenRemoved(address indexed principalToken);
 
@@ -46,10 +46,8 @@ abstract contract PendleTestBase is IntegrationTest {
 
     event LpTokenRemoved(address indexed lpToken);
 
-    event OracleDurationForMarketAdded(address indexed market, uint32 indexed pricingDuration);
-
     uint256 internal pendleV2TypeId;
-    uint256 internal pendleMarketFactoriesListId;
+    IPendleV2MarketRegistry internal pendleV2MarketRegistry;
     IPendleV2PositionLib internal pendleV2PositionLib;
     IPendleV2PositionParser internal pendleV2PositionParser;
     IPendleV2PositionLib internal pendleV2ExternalPosition;
@@ -57,7 +55,7 @@ abstract contract PendleTestBase is IntegrationTest {
     IERC20 internal underlyingAsset;
     IPendleV2Market internal market;
     IPendleV2PrincipalToken internal principalToken;
-    IPendleV2PtOracle internal pendlePtOracle;
+    IPendleV2PtAndLpOracle internal pendlePtAndLpOracle;
     IPendleV2Router internal pendleRouter;
     IPendleV2Router.ApproxParams internal guessPtOut;
     IPendleV2StandardizedYield internal syToken;
@@ -73,41 +71,31 @@ abstract contract PendleTestBase is IntegrationTest {
 
     function __initialize(
         EnzymeVersion _version,
-        address[] memory _pendleMarketFactoryAddresses,
-        address _pendlePtOracleAddress,
+        address _pendlePtAndLpOracleAddress,
         address _pendleRouterAddress,
         address _pendleMarketAddress,
         uint32 _pricingDuration
     ) internal {
+        // Assign vars from inputs
         version = _version;
-
-        setUpMainnetEnvironment(ETHEREUM_BLOCK_PENDLE_TIME_SENSITIVE);
-
-        pendlePtOracle = IPendleV2PtOracle(_pendlePtOracleAddress);
+        pendlePtAndLpOracle = IPendleV2PtAndLpOracle(_pendlePtAndLpOracleAddress);
         pendleRouter = IPendleV2Router(_pendleRouterAddress);
-
-        // Create a new AddressListRegistry list for Pendle Market factories
-        pendleMarketFactoriesListId = core.persistent.addressListRegistry.createList({
-            _owner: makeAddr("PendleMarketFactoriesListOwner"),
-            _updateType: formatAddressListRegistryUpdateType(IAddressListRegistryProd.UpdateType.AddAndRemove),
-            _initialItems: _pendleMarketFactoryAddresses
-        });
-
-        externalPositionManager = IExternalPositionManager(getExternalPositionManagerAddressForVersion(version));
-        (pendleV2PositionLib, pendleV2PositionParser, pendleV2TypeId) = deployPendleV2({
-            _addressListRegistry: address(core.persistent.addressListRegistry),
-            _minimumPricingDuration: MINIMUM_PRICING_DURATION,
-            _maximumPricingDuration: MAXIMUM_PRICING_DURATION,
-            _pendleMarketFactoriesListId: pendleMarketFactoriesListId,
-            _pendlePtOracleAddress: _pendlePtOracleAddress,
-            _pendleRouterAddress: _pendleRouterAddress,
-            _wrappedNativeAssetAddress: address(wrappedNativeToken)
-        });
-
         market = IPendleV2Market(_pendleMarketAddress);
         pricingDuration = _pricingDuration;
-        (syToken, principalToken,) = market.readTokens();
 
+        // Validate that the market has at least one reward token
+        // @dev This can be moved to specific market setup, we just need at least one market per version with reward tokens
+        require(market.getRewardTokens().length > 0, "__initialize: Market has no reward tokens");
+
+        // Assign other misc vars
+        externalPositionManager = IExternalPositionManager(getExternalPositionManagerAddressForVersion(version));
+        (syToken, principalToken,) = market.readTokens();
+        (, address underlyingAssetAddress,) = syToken.assetInfo();
+        // If underlyingAssetAddress is the 0 address, this indicates that the NATIVE_ASSET is the reference asset
+        if (underlyingAssetAddress == PENDLE_NATIVE_ASSET_ADDRESS) {
+            underlyingAssetAddress = address(wrappedNativeToken);
+        }
+        underlyingAsset = IERC20(underlyingAssetAddress);
         // Default generic guessPtOut. In a production setting, these settings can be calculated offchain to reduce gas usage.
         // src: https://docs.pendle.finance/Developers/Contracts/PendleRouter#approxparams
         guessPtOut = IPendleV2Router.ApproxParams({
@@ -118,8 +106,22 @@ abstract contract PendleTestBase is IntegrationTest {
             eps: 1e15
         });
 
-        (comptrollerProxyAddress, vaultProxyAddress, fundOwner) = createTradingFundForVersion(version);
+        // Add the market's underlyingAsset to the asset universe
+        addPrimitiveWithTestAggregator({
+            _valueInterpreter: core.release.valueInterpreter,
+            _tokenAddress: underlyingAssetAddress,
+            _skipIfRegistered: true
+        });
 
+        // Deploy and register all Pendle V2 contracts
+        (pendleV2MarketRegistry, pendleV2PositionLib, pendleV2PositionParser, pendleV2TypeId) = deployPendleV2({
+            _pendlePtAndLpOracleAddress: _pendlePtAndLpOracleAddress,
+            _pendleRouterAddress: _pendleRouterAddress,
+            _wrappedNativeAssetAddress: address(wrappedNativeToken)
+        });
+
+        // Create a fund and add an empty Pendle position
+        (comptrollerProxyAddress, vaultProxyAddress, fundOwner) = createTradingFundForVersion(version);
         vm.prank(fundOwner);
         pendleV2ExternalPosition = IPendleV2PositionLib(
             createExternalPositionForVersion({
@@ -130,59 +132,48 @@ abstract contract PendleTestBase is IntegrationTest {
             })
         );
 
-        // Increase the wrapped native token balance to allow testing native token deposits
-        increaseTokenBalance({_token: wrappedNativeToken, _to: vaultProxyAddress, _amount: 100 ether});
-
-        // Seed the vault with the pendle syToken underlying
-        (, address underlyingAssetAddress,) = syToken.assetInfo();
-
-        // If underlyingAssetAddress is the 0 address, this indicates that the NATIVE_ASSET is the reference asset
-        if (underlyingAssetAddress == PENDLE_NATIVE_ASSET_ADDRESS) {
-            underlyingAssetAddress = address(wrappedNativeToken);
-        }
-
-        underlyingAsset = IERC20(underlyingAssetAddress);
-
-        // Add the underlyingAsset to the asset universe
-        addPrimitiveWithTestAggregator({
-            _valueInterpreter: core.release.valueInterpreter,
-            _tokenAddress: underlyingAssetAddress,
-            _skipIfRegistered: true
+        // Register the PT and market for the fund (call directly from vault)
+        vm.prank(vaultProxyAddress);
+        pendleV2MarketRegistry.updateMarketsForCaller({
+            _updateMarketInputs: __encodePendleV2MarketRegistryUpdate({
+                _marketAddress: address(market),
+                _duration: pricingDuration
+            }),
+            _skipValidation: false
         });
 
+        // Increase the vault's balances of tokens to use in Pendle actions
+        increaseTokenBalance({_token: wrappedNativeToken, _to: vaultProxyAddress, _amount: 100 ether});
         increaseTokenBalance({
             _token: underlyingAsset,
             _to: vaultProxyAddress,
             _amount: 100 * assetUnit(underlyingAsset)
         });
 
+        // Set a deposit amount to be used for the tests
         depositAmount = underlyingAsset.balanceOf(vaultProxyAddress) / 7;
     }
 
     // DEPLOYMENT HELPERS
 
     function deployPendleV2(
-        address _addressListRegistry,
-        uint32 _minimumPricingDuration,
-        uint32 _maximumPricingDuration,
-        uint256 _pendleMarketFactoriesListId,
-        address _pendlePtOracleAddress,
+        address _pendlePtAndLpOracleAddress,
         address _pendleRouterAddress,
         address _wrappedNativeAssetAddress
     )
         public
         returns (
+            IPendleV2MarketRegistry pendleV2MarketRegistry_,
             IPendleV2PositionLib pendleV2PositionLib_,
             IPendleV2PositionParser pendleV2PositionParser_,
             uint256 typeId_
         )
     {
+        pendleV2MarketRegistry_ =
+            __deployPendleV2MarketRegistry({_pendlePtAndLpOracleAddress: _pendlePtAndLpOracleAddress});
+
         pendleV2PositionLib_ = deployPendleV2PositionLib({
-            _addressListRegistry: _addressListRegistry,
-            _minimumPricingDuration: _minimumPricingDuration,
-            _maximumPricingDuration: _maximumPricingDuration,
-            _pendleMarketFactoriesListId: _pendleMarketFactoriesListId,
-            _pendlePtOracleAddress: _pendlePtOracleAddress,
+            _pendleMarketRegistryAddress: address(pendleV2MarketRegistry_),
             _pendleRouterAddress: _pendleRouterAddress,
             _wrappedNativeAssetAddress: _wrappedNativeAssetAddress
         });
@@ -196,27 +187,15 @@ abstract contract PendleTestBase is IntegrationTest {
             _parser: address(pendleV2PositionParser_)
         });
 
-        return (pendleV2PositionLib_, pendleV2PositionParser_, typeId_);
+        return (pendleV2MarketRegistry_, pendleV2PositionLib_, pendleV2PositionParser_, typeId_);
     }
 
     function deployPendleV2PositionLib(
-        address _addressListRegistry,
-        uint32 _minimumPricingDuration,
-        uint32 _maximumPricingDuration,
-        uint256 _pendleMarketFactoriesListId,
-        address _pendlePtOracleAddress,
+        address _pendleMarketRegistryAddress,
         address _pendleRouterAddress,
         address _wrappedNativeAssetAddress
     ) public returns (IPendleV2PositionLib) {
-        bytes memory args = abi.encode(
-            _addressListRegistry,
-            _minimumPricingDuration,
-            _maximumPricingDuration,
-            _pendleMarketFactoriesListId,
-            _pendlePtOracleAddress,
-            _pendleRouterAddress,
-            _wrappedNativeAssetAddress
-        );
+        bytes memory args = abi.encode(_pendleMarketRegistryAddress, _pendleRouterAddress, _wrappedNativeAssetAddress);
         address addr = deployCode("PendleV2PositionLib.sol", args);
         return IPendleV2PositionLib(addr);
     }
@@ -232,18 +211,8 @@ abstract contract PendleTestBase is IntegrationTest {
 
     // ACTION HELPERS
 
-    function __buyPrincipalTokenVerbose(
-        IPendleV2PrincipalToken _principalToken,
-        IPendleV2Market _market,
-        uint32 _pricingDuration,
-        address _depositTokenAddress,
-        uint256 _depositAmount,
-        IPendleV2Router.ApproxParams memory _guessPtOut,
-        uint256 _minPtOut
-    ) private {
-        bytes memory actionArgs = abi.encode(
-            _principalToken, _market, _pricingDuration, _depositTokenAddress, _depositAmount, _guessPtOut, _minPtOut
-        );
+    function __buyPrincipalToken(address _depositTokenAddress) private {
+        bytes memory actionArgs = abi.encode(market, _depositTokenAddress, depositAmount, guessPtOut, 0);
 
         vm.prank(fundOwner);
 
@@ -256,27 +225,8 @@ abstract contract PendleTestBase is IntegrationTest {
         });
     }
 
-    function __buyPrincipalToken(address _depositTokenAddress) private {
-        __buyPrincipalTokenVerbose({
-            _principalToken: principalToken,
-            _market: market,
-            _pricingDuration: pricingDuration,
-            _depositTokenAddress: _depositTokenAddress,
-            _depositAmount: depositAmount,
-            _guessPtOut: guessPtOut,
-            _minPtOut: 0
-        });
-    }
-
-    function __sellPrincipalTokenVerbose(
-        IPendleV2PrincipalToken _principalToken,
-        IPendleV2Market _market,
-        address _underlyingAsset,
-        uint256 _withdrawalAmount,
-        uint256 _minIncomingAmount
-    ) private {
-        bytes memory actionArgs =
-            abi.encode(_principalToken, _market, _underlyingAsset, _withdrawalAmount, _minIncomingAmount);
+    function __sellPrincipalToken(address _withdrawalTokenAddress, uint256 _withdrawalAmount) private {
+        bytes memory actionArgs = abi.encode(market, _withdrawalTokenAddress, _withdrawalAmount, 0);
 
         vm.prank(fundOwner);
 
@@ -289,26 +239,8 @@ abstract contract PendleTestBase is IntegrationTest {
         });
     }
 
-    function __sellPrincipalToken(address _withdrawalTokenAddress, uint256 _withdrawalAmount) private {
-        __sellPrincipalTokenVerbose({
-            _principalToken: principalToken,
-            _market: market,
-            _underlyingAsset: _withdrawalTokenAddress,
-            _withdrawalAmount: _withdrawalAmount,
-            _minIncomingAmount: 0
-        });
-    }
-
-    function __addLiquidityVerbose(
-        IPendleV2Market _market,
-        uint32 _pricingDuration,
-        IERC20 _underlyingAsset,
-        uint256 _depositAmount,
-        IPendleV2Router.ApproxParams memory _guessPtOut,
-        uint256 _minLpOut
-    ) private {
-        bytes memory actionArgs =
-            abi.encode(_market, _pricingDuration, _underlyingAsset, _depositAmount, _guessPtOut, _minLpOut);
+    function __addLiquidity() private {
+        bytes memory actionArgs = abi.encode(market, underlyingAsset, depositAmount, guessPtOut, 0);
 
         vm.prank(fundOwner);
 
@@ -321,26 +253,8 @@ abstract contract PendleTestBase is IntegrationTest {
         });
     }
 
-    function __addLiquidity() private {
-        __addLiquidityVerbose({
-            _market: market,
-            _pricingDuration: pricingDuration,
-            _underlyingAsset: underlyingAsset,
-            _depositAmount: depositAmount,
-            _guessPtOut: guessPtOut,
-            _minLpOut: 0
-        });
-    }
-
-    function __removeLiquidityVerbose(
-        IPendleV2Market _market,
-        IERC20 _withdrawalToken,
-        uint256 _withdrawalAmount,
-        uint256 _minSyOut,
-        uint256 _minIncomingAmount
-    ) private {
-        bytes memory actionArgs =
-            abi.encode(_market, _withdrawalToken, _withdrawalAmount, _minSyOut, _minIncomingAmount);
+    function __removeLiquidity(uint256 _withdrawalAmount) private {
+        bytes memory actionArgs = abi.encode(market, underlyingAsset, _withdrawalAmount, 0, 0);
 
         vm.prank(fundOwner);
 
@@ -350,16 +264,6 @@ abstract contract PendleTestBase is IntegrationTest {
             _externalPositionAddress: address(pendleV2ExternalPosition),
             _actionId: uint256(IPendleV2PositionProd.Actions.RemoveLiquidity),
             _actionArgs: actionArgs
-        });
-    }
-
-    function __removeLiquidity(uint256 _withdrawalAmount) private {
-        __removeLiquidityVerbose({
-            _market: market,
-            _withdrawalToken: underlyingAsset,
-            _withdrawalAmount: _withdrawalAmount,
-            _minSyOut: 0,
-            _minIncomingAmount: 0
         });
     }
 
@@ -383,11 +287,7 @@ abstract contract PendleTestBase is IntegrationTest {
 
         // Assert that the AddPrincipalToken event has been emitted
         expectEmit(address(pendleV2ExternalPosition));
-        emit PrincipalTokenAdded(address(principalToken), address(market));
-
-        // Assert that the AddMarket event has been emitted
-        expectEmit(address(pendleV2ExternalPosition));
-        emit OracleDurationForMarketAdded(address(market), pricingDuration);
+        emit PrincipalTokenAdded(address(principalToken));
 
         __buyPrincipalToken({_depositTokenAddress: _depositTokenAddress});
 
@@ -400,9 +300,6 @@ abstract contract PendleTestBase is IntegrationTest {
         // Assert that the principalToken has been added to the external position
         assertEq(toArray(address(principalToken)), pendleV2ExternalPosition.getPrincipalTokens());
 
-        // Assert that the market has been added to the external position with the proper duration
-        assertEq(pricingDuration, pendleV2ExternalPosition.getOraclePricingDurationForMarket(address(market)));
-
         // Assert that the PrincipalToken value is accounted for in the EP
         (, address expectedAsset,) = syToken.assetInfo();
         uint256 principalTokenBalance = IERC20(address(principalToken)).balanceOf(address(pendleV2ExternalPosition));
@@ -411,7 +308,7 @@ abstract contract PendleTestBase is IntegrationTest {
         assertGt(principalTokenBalance, 0, "Incorrect principalToken balance");
 
         uint256 expectedAssetAmount = principalTokenBalance
-            * pendlePtOracle.getPtToAssetRate({_market: address(market), _duration: pricingDuration})
+            * pendlePtAndLpOracle.getPtToAssetRate({_market: address(market), _duration: pricingDuration})
             / ORACLE_RATE_PRECISION;
 
         // Assert that the EP holds the principalToken
@@ -444,105 +341,24 @@ abstract contract PendleTestBase is IntegrationTest {
         }
     }
 
-    // Test buying a principalToken for which the rate asset is the native asset
-    // TODO: Uncomment this when the oracle is ready for usage, or when we find a way to mock its validity
-    // function test_buyPrincipalToken_nativeRateAsset_success() public {
-    //     IPendleV2Market marketNativeRateAsset = IPendleV2Market(ETHEREUM_EZETH_25APR2024_MARKET_ADDRESS);
-    //     (, IPendleV2PrincipalToken principalTokenNativeRateAsset,) = marketNativeRateAsset.readTokens();
-    //     __buyPrincipalTokenVerbose({
-    //         _principalToken: principalTokenNativeRateAsset,
-    //         _market: marketNativeRateAsset,
-    //         _pricingDuration: 900,
-    //         _depositTokenAddress: NATIVE_ASSET_ADDRESS,
-    //         _depositAmount: depositAmount,
-    //         _guessPtOut: guessPtOut,
-    //         _minPtOut: 0
-    //     });
-    // }
+    function test_buyPrincipalToken_failsWithDifferentPtMarket() public {
+        // Clone the market
+        address altMarketForPtAddress = makeAddr("AltMarketForPt");
+        vm.etch(altMarketForPtAddress, address(market).code);
 
-    // Test that the function reverts if the market mismatches the previously set market for the principal token
-    function test_buyPrincipalToken_inconsistentMarket_failure() public {
+        // Link PT to the cloned market
+        vm.prank(vaultProxyAddress);
+        pendleV2MarketRegistry.updateMarketsForCaller({
+            _updateMarketInputs: __encodePendleV2MarketRegistryUpdate({
+                _marketAddress: altMarketForPtAddress,
+                _duration: pricingDuration
+            }),
+            _skipValidation: true
+        });
+
+        // Should fail
+        vm.expectRevert(formatError("__validateMarketForPt: Unsupported market"));
         __buyPrincipalToken({_depositTokenAddress: address(underlyingAsset)});
-
-        vm.expectRevert(formatError("__handlePrincipalTokenInput: stored market address mismatch"));
-
-        // Attempt to buy the same principalToken with a different market
-        __buyPrincipalTokenVerbose({
-            _principalToken: principalToken,
-            _market: IPendleV2Market(makeAddr("Invalid market")),
-            _pricingDuration: pricingDuration,
-            _depositTokenAddress: address(underlyingAsset),
-            _depositAmount: depositAmount,
-            _guessPtOut: guessPtOut,
-            _minPtOut: 0
-        });
-
-        vm.expectRevert(formatError("__handleMarketAndDurationInput: stored duration mismatch"));
-
-        // Attempt to buy the same principalToken with the same market but a different duration
-        __buyPrincipalTokenVerbose({
-            _principalToken: principalToken,
-            _market: market,
-            _pricingDuration: pricingDuration + 1,
-            _depositTokenAddress: address(underlyingAsset),
-            _depositAmount: depositAmount,
-            _guessPtOut: guessPtOut,
-            _minPtOut: 0
-        });
-    }
-
-    // Test that the function reverts if the pricing duration is not supported by the market
-    function test_buyPrincipalToken_badMarketPricingDuration_failure() public {
-        IPendleV2Market marketBadMarketPricingDuration = IPendleV2Market(ETHEREUM_EZETH_25APR2024_MARKET_ADDRESS);
-        (IPendleV2StandardizedYield sy, IPendleV2PrincipalToken pt,) = marketBadMarketPricingDuration.readTokens();
-
-        // Use the first available deposit token as the deposit token
-        address depositTokenAddress = sy.getTokensIn()[0];
-
-        // Seed the deposit token
-        increaseTokenBalance({_token: IERC20(depositTokenAddress), _to: vaultProxyAddress, _amount: depositAmount});
-
-        vm.expectRevert(formatError("__validateMarketAndDuration: invalid pricing duration"));
-
-        __buyPrincipalTokenVerbose({
-            _principalToken: pt,
-            _market: marketBadMarketPricingDuration,
-            _pricingDuration: 900,
-            _depositTokenAddress: depositTokenAddress,
-            _depositAmount: depositAmount,
-            _guessPtOut: guessPtOut,
-            _minPtOut: 0
-        });
-    }
-
-    // Test that the function reverts if the pricing duration falls outside of the EP's supported range
-    function test_buyPrincipalToken_badPricingDuration_failure() public {
-        uint32 tooSmallDuration = MINIMUM_PRICING_DURATION - 1;
-        uint32 tooBigDuration = MAXIMUM_PRICING_DURATION + 1;
-
-        vm.expectRevert(formatError("__validateMarketAndDuration: out-of-bounds duration"));
-
-        __buyPrincipalTokenVerbose({
-            _principalToken: principalToken,
-            _market: market,
-            _pricingDuration: tooSmallDuration,
-            _depositTokenAddress: address(underlyingAsset),
-            _depositAmount: depositAmount,
-            _guessPtOut: guessPtOut,
-            _minPtOut: 0
-        });
-
-        vm.expectRevert(formatError("__validateMarketAndDuration: out-of-bounds duration"));
-
-        __buyPrincipalTokenVerbose({
-            _principalToken: principalToken,
-            _market: market,
-            _pricingDuration: tooBigDuration,
-            _depositTokenAddress: address(underlyingAsset),
-            _depositAmount: depositAmount,
-            _guessPtOut: guessPtOut,
-            _minPtOut: 0
-        });
     }
 
     function __test_sellPrincipalToken(bool _sellAll, bool _expiredPrincipalToken) private {
@@ -558,7 +374,7 @@ abstract contract PendleTestBase is IntegrationTest {
         }
 
         uint256 expectedUnderlyingDelta = withdrawalAmount
-            * pendlePtOracle.getPtToAssetRate({_market: address(market), _duration: pricingDuration})
+            * pendlePtAndLpOracle.getPtToAssetRate({_market: address(market), _duration: pricingDuration})
             / ORACLE_RATE_PRECISION;
 
         if (_sellAll) {
@@ -621,9 +437,34 @@ abstract contract PendleTestBase is IntegrationTest {
         }
     }
 
+    function test_sellPrincipalToken_failsWithDifferentPtMarket() public {
+        // Acquire PT
+        __buyPrincipalToken({_depositTokenAddress: address(underlyingAsset)});
+        uint256 principalTokenBalance = IERC20(address(principalToken)).balanceOf(address(pendleV2ExternalPosition));
+
+        // Clone the market
+        address altMarketForPtAddress = makeAddr("AltMarketForPt");
+        vm.etch(altMarketForPtAddress, address(market).code);
+
+        // Link PT to the cloned market
+        vm.prank(vaultProxyAddress);
+        pendleV2MarketRegistry.updateMarketsForCaller({
+            _updateMarketInputs: __encodePendleV2MarketRegistryUpdate({
+                _marketAddress: altMarketForPtAddress,
+                _duration: pricingDuration
+            }),
+            _skipValidation: true
+        });
+
+        // Should fail
+        vm.expectRevert(formatError("__validateMarketForPt: Unsupported market"));
+        __sellPrincipalToken({
+            _withdrawalTokenAddress: address(underlyingAsset),
+            _withdrawalAmount: principalTokenBalance
+        });
+    }
+
     function test_addLiquidity_success() public {
-        vm.expectEmit();
-        emit OracleDurationForMarketAdded(address(market), pricingDuration);
         vm.expectEmit();
         emit LpTokenAdded(address(market));
 
@@ -652,6 +493,19 @@ abstract contract PendleTestBase is IntegrationTest {
 
         // Assert that the value of the LP is similar to the provided underlying
         assertApproxEqRel(depositAmount, amounts[0], WEI_ONE_PERCENT / 5);
+    }
+
+    function test_addLiquidity_failsWithZeroMarketDuration() public {
+        // Set market duration to 0
+        vm.prank(vaultProxyAddress);
+        pendleV2MarketRegistry.updateMarketsForCaller({
+            _updateMarketInputs: __encodePendleV2MarketRegistryUpdate({_marketAddress: address(market), _duration: 0}),
+            _skipValidation: false
+        });
+
+        // Should fail
+        vm.expectRevert(formatError("__addLiquidity: Unsupported market"));
+        __addLiquidity();
     }
 
     function __test_removeLiquidity(bool _removeAll) private {
@@ -702,6 +556,12 @@ abstract contract PendleTestBase is IntegrationTest {
         __test_removeLiquidity({_removeAll: false});
     }
 
+    function test_removeLiquidity_failsWithUnheldLpToken() public {
+        // Should fail
+        vm.expectRevert(formatError("__removeLiquidity: Unsupported market"));
+        __removeLiquidity({_withdrawalAmount: 1});
+    }
+
     function test_claimRewards_success() public {
         address[] memory rewardTokens = market.getRewardTokens();
 
@@ -741,6 +601,53 @@ abstract contract PendleTestBase is IntegrationTest {
         }
     }
 
+    function test_claimRewards_successWithPtAndLpAsRewards() public {
+        // Acquire PT and LP so that: (1) rewards accrue and (2) we can test that PT and LP rewards will not be sent to the vault
+        __buyPrincipalToken({_depositTokenAddress: address(underlyingAsset)});
+        __addLiquidity();
+
+        address[] memory originalRewardTokens = market.getRewardTokens();
+
+        // Add PT and LP to the list of reward tokens and mock the rewardTokens callback
+        address[] memory rewardTokensPlusPtAndLp =
+            originalRewardTokens.mergeArray(toArray(address(principalToken), address(market)));
+        vm.mockCall({
+            callee: address(market),
+            data: abi.encodeWithSelector(IPendleV2Market.getRewardTokens.selector),
+            returnData: abi.encode(rewardTokensPlusPtAndLp)
+        });
+        assertEq(market.getRewardTokens(), rewardTokensPlusPtAndLp);
+
+        // Checkpoint pre-claim balances of normal reward tokens
+        uint256[] memory originalRewardTokenBalancesPreClaim = new uint256[](originalRewardTokens.length);
+        for (uint256 i; i < originalRewardTokens.length; i++) {
+            originalRewardTokenBalancesPreClaim[i] = IERC20(originalRewardTokens[i]).balanceOf(vaultProxyAddress);
+        }
+
+        // Warp the time to allow rewards to accrue
+        skip(50 days);
+
+        // Update user rewards as per Pendle technical docs:
+        // https://docs.pendle.finance/Developers/Contracts/TechnicalDetails#getting-up-to-dateaccruedrewardson-chain-applicable-to-sy-yt--lp
+        IERC20(address(market)).transfer(address(pendleV2ExternalPosition), 0);
+
+        __claimRewards(toArray(address(market)));
+
+        // TODO: blocked since rewards don't accrue in these tests
+        // Assert that normal rewards tokens were sent to the vault
+        // for (uint256 i; i < originalRewardTokens.length; i++) {
+        //     assertGt(
+        //         IERC20(originalRewardTokens[i]).balanceOf(vaultProxyAddress),
+        //         originalRewardTokenBalancesPreClaim[i],
+        //         "Incorrect reward token balance"
+        //     );
+        // }
+
+        // Assert that the PT and LP tokens have not been sent to the vault
+        assertEq(IERC20(address(principalToken)).balanceOf(vaultProxyAddress), 0);
+        assertEq(IERC20(address(market)).balanceOf(vaultProxyAddress), 0);
+    }
+
     function test_multiplePositions_success() public {
         __buyPrincipalToken({_depositTokenAddress: address(underlyingAsset)});
         __addLiquidity();
@@ -778,16 +685,59 @@ abstract contract PendleTestBase is IntegrationTest {
         // Value of the EP should be roughly equal 2 deposit amounts (2x PT)
         assertApproxEqRel(depositAmount * 2, amountsThird[0], WEI_ONE_PERCENT / 2);
     }
+
+    function test_positionValue_failsWithZeroDurationForLpToken() public {
+        __addLiquidity();
+
+        // Set market duration to 0
+        vm.prank(vaultProxyAddress);
+        pendleV2MarketRegistry.updateMarketsForCaller({
+            _updateMarketInputs: __encodePendleV2MarketRegistryUpdate({_marketAddress: address(market), _duration: 0}),
+            _skipValidation: false
+        });
+
+        // Should fail
+        vm.expectRevert("__getLpTokenValue: Duration not registered");
+        pendleV2ExternalPosition.getManagedAssets();
+    }
+
+    function test_positionValue_failsWithZeroDurationForPt() public {
+        __buyPrincipalToken({_depositTokenAddress: address(underlyingAsset)});
+
+        // Set market duration to 0
+        vm.prank(vaultProxyAddress);
+        pendleV2MarketRegistry.updateMarketsForCaller({
+            _updateMarketInputs: __encodePendleV2MarketRegistryUpdate({_marketAddress: address(market), _duration: 0}),
+            _skipValidation: false
+        });
+
+        // Should fail
+        vm.expectRevert("__getPrincipalTokenValue: Duration not registered");
+        pendleV2ExternalPosition.getManagedAssets();
+    }
+}
+
+abstract contract PendleTestEthereum is PendleTestBase {
+    function __initializeEthereum(EnzymeVersion _version, address _pendleMarketAddress, uint32 _pricingDuration)
+        internal
+    {
+        setUpMainnetEnvironment(ETHEREUM_BLOCK_PENDLE_TIME_SENSITIVE);
+
+        __initialize({
+            _version: _version,
+            _pendlePtAndLpOracleAddress: ETHEREUM_PT_ORACLE,
+            _pendleRouterAddress: ETHEREUM_ROUTER,
+            _pendleMarketAddress: _pendleMarketAddress,
+            _pricingDuration: _pricingDuration
+        });
+    }
 }
 
 // Pendle weETH is a v3 market
-contract PendleWeEthTestEthereum is PendleTestBase {
+contract PendleWeEthTestEthereum is PendleTestEthereum {
     function setUp() public override {
-        __initialize({
+        __initializeEthereum({
             _version: EnzymeVersion.Current,
-            _pendleMarketFactoryAddresses: toArray(ETHEREUM_MARKET_FACTORY_V1, ETHEREUM_MARKET_FACTORY_V3),
-            _pendlePtOracleAddress: ETHEREUM_PT_ORACLE,
-            _pendleRouterAddress: ETHEREUM_ROUTER,
             _pendleMarketAddress: ETHEREUM_WEETH_27JUN2024_MARKET_ADDRESS,
             _pricingDuration: 900 // 15 minutes
         });
@@ -795,13 +745,10 @@ contract PendleWeEthTestEthereum is PendleTestBase {
 }
 
 // Pendle weETH is a v3 market
-contract PendleWeEthTestEthereumV4 is PendleTestBase {
+contract PendleWeEthTestEthereumV4 is PendleTestEthereum {
     function setUp() public override {
-        __initialize({
+        __initializeEthereum({
             _version: EnzymeVersion.V4,
-            _pendleMarketFactoryAddresses: toArray(ETHEREUM_MARKET_FACTORY_V1, ETHEREUM_MARKET_FACTORY_V3),
-            _pendlePtOracleAddress: ETHEREUM_PT_ORACLE,
-            _pendleRouterAddress: ETHEREUM_ROUTER,
             _pendleMarketAddress: ETHEREUM_WEETH_27JUN2024_MARKET_ADDRESS,
             _pricingDuration: 900 // 15 minutes
         });
@@ -809,13 +756,10 @@ contract PendleWeEthTestEthereumV4 is PendleTestBase {
 }
 
 // Pendle steth is a v1 market
-contract PendleStethTestEthereum is PendleTestBase {
+contract PendleStethTestEthereum is PendleTestEthereum {
     function setUp() public override {
-        __initialize({
+        __initializeEthereum({
             _version: EnzymeVersion.Current,
-            _pendleMarketFactoryAddresses: toArray(ETHEREUM_MARKET_FACTORY_V1, ETHEREUM_MARKET_FACTORY_V3),
-            _pendlePtOracleAddress: ETHEREUM_PT_ORACLE,
-            _pendleRouterAddress: ETHEREUM_ROUTER,
             _pendleMarketAddress: ETHEREUM_STETH_26DEC2025_MARKET_ADDRESS,
             _pricingDuration: 900 // 15 minutes
         });
@@ -823,13 +767,10 @@ contract PendleStethTestEthereum is PendleTestBase {
 }
 
 // Pendle steth is a v1 market
-contract PendleStethTestEthereumV4 is PendleTestBase {
+contract PendleStethTestEthereumV4 is PendleTestEthereum {
     function setUp() public override {
-        __initialize({
+        __initializeEthereum({
             _version: EnzymeVersion.V4,
-            _pendleMarketFactoryAddresses: toArray(ETHEREUM_MARKET_FACTORY_V1, ETHEREUM_MARKET_FACTORY_V3),
-            _pendlePtOracleAddress: ETHEREUM_PT_ORACLE,
-            _pendleRouterAddress: ETHEREUM_ROUTER,
             _pendleMarketAddress: ETHEREUM_STETH_26DEC2025_MARKET_ADDRESS,
             _pricingDuration: 900 // 15 minutes
         });

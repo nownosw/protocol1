@@ -19,7 +19,7 @@ pragma solidity 0.8.19;
 /// a numbered PendleV2PositionLibBaseXXX that inherits the previous base.
 /// e.g., `PendleV2PositionLibBase2 is PendleV2PositionLibBase1`
 abstract contract PendleV2PositionLibBase1 {
-    event PrincipalTokenAdded(address indexed principalToken, address indexed market);
+    event PrincipalTokenAdded(address indexed principalToken);
 
     event PrincipalTokenRemoved(address indexed principalToken);
 
@@ -27,13 +27,7 @@ abstract contract PendleV2PositionLibBase1 {
 
     event LpTokenRemoved(address indexed lpToken);
 
-    event OracleDurationForMarketAdded(address indexed market, uint32 indexed pricingDuration);
-
     address[] internal principalTokens;
 
     address[] internal lpTokens;
-
-    mapping(address principalToken => address market) internal principalTokenToMarket;
-
-    mapping(address market => uint32 pricingDuration) internal marketToOraclePricingDuration;
 }

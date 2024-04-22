@@ -11,8 +11,11 @@
 
 pragma solidity >=0.6.0 <0.9.0;
 
-/// @title IPendleV2MarketFactory Interface
+/// @title IPendleV2PtAndLpOracle Interface
 /// @author Enzyme Council <security@enzyme.finance>
-interface IPendleV2MarketFactory {
-    function isValidMarket(address _market) external view returns (bool isValidMarket_);
+interface IPendleV2PtAndLpOracle {
+    function getOracleState(address _market, uint32 _duration)
+        external
+        view
+        returns (bool increaseCardinalityRequired_, uint16 cardinalityRequired_, bool oldestObservationSatisfied_);
 }

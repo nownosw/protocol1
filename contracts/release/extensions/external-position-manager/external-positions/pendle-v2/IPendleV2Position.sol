@@ -22,16 +22,6 @@ interface IPendleV2Position is IExternalPosition {
         ClaimRewards
     }
 
-    function getMarketForPrincipalToken(address _principalTokenAddress)
-        external
-        view
-        returns (address marketAddress_);
-
-    function getOraclePricingDurationForMarket(address _marketAddress)
-        external
-        view
-        returns (uint32 pricingDuration_);
-
     function getLPTokens() external view returns (address[] memory lpTokenAddresses_);
 
     function getPrincipalTokens() external view returns (address[] memory principalTokenAddresses_);

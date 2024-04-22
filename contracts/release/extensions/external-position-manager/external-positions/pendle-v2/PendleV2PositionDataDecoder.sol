@@ -22,18 +22,14 @@ abstract contract PendleV2PositionDataDecoder {
         internal
         pure
         returns (
-            address principalTokenAddress_,
             IPendleV2Market market_,
-            uint32 pricingDuration_,
             address depositTokenAddress_,
             uint256 depositAmount_,
             IPendleV2Router.ApproxParams memory guessPtOut_,
             uint256 minPtOut_
         )
     {
-        return abi.decode(
-            _actionArgs, (address, IPendleV2Market, uint32, address, uint256, IPendleV2Router.ApproxParams, uint256)
-        );
+        return abi.decode(_actionArgs, (IPendleV2Market, address, uint256, IPendleV2Router.ApproxParams, uint256));
     }
 
     /// @dev Helper to decode args used during the SellPrincipalToken action
@@ -41,14 +37,13 @@ abstract contract PendleV2PositionDataDecoder {
         internal
         pure
         returns (
-            IPendleV2PrincipalToken principalTokenAddress_,
             IPendleV2Market market_,
             address withdrawalTokenAddress_,
             uint256 withdrawalAmount_,
             uint256 minIncomingAmount_
         )
     {
-        return abi.decode(_actionArgs, (IPendleV2PrincipalToken, IPendleV2Market, address, uint256, uint256));
+        return abi.decode(_actionArgs, (IPendleV2Market, address, uint256, uint256));
     }
 
     /// @dev Helper to decode args used during the AddLiquidity action
@@ -57,15 +52,13 @@ abstract contract PendleV2PositionDataDecoder {
         pure
         returns (
             IPendleV2Market market_,
-            uint32 pricingDuration_,
             address depositTokenAddress_,
             uint256 depositAmount_,
             IPendleV2Router.ApproxParams memory guessPtReceived_,
             uint256 minLpOut_
         )
     {
-        return
-            abi.decode(_actionArgs, (IPendleV2Market, uint32, address, uint256, IPendleV2Router.ApproxParams, uint256));
+        return abi.decode(_actionArgs, (IPendleV2Market, address, uint256, IPendleV2Router.ApproxParams, uint256));
     }
 
     /// @dev Helper to decode args used during the AddLiquidity action
