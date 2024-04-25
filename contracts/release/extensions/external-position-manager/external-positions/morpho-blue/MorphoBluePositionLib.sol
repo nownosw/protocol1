@@ -28,6 +28,10 @@ import {MorphoBluePositionDataDecoder} from "./MorphoBluePositionDataDecoder.sol
 /// @title MorphoBluePositionLib Contract
 /// @author Enzyme Foundation <security@enzyme.finance>
 /// @notice An External Position library contract for Morpho Blue Positions
+/// @dev The Enzyme Foundation maintains a list of allowed Morpho Blue vaults (a list of market ids).
+/// If the vault is not in the list:
+/// - asset managers will only be able to make "unwinding" actions, i.e., Redeem, RemoveCollateral, and Repay
+/// - position value calculations will revert until the vault is completely unwound
 contract MorphoBluePositionLib is
     IMorphoBluePosition,
     MorphoBluePositionDataDecoder,
@@ -109,8 +113,6 @@ contract MorphoBluePositionLib is
     function __redeem(bytes memory _actionArgs) private {
         (bytes32 marketId, uint256 sharesAmount) = __decodeRedeemActionArgs(_actionArgs);
 
-        __validateMarketId({_marketId: marketId});
-
         // Withdraw the asset
         MORPHO_BLUE.withdraw({
             _marketParams: MORPHO_BLUE.idToMarketParams({_id: marketId}),
@@ -153,8 +155,6 @@ contract MorphoBluePositionLib is
     function __removeCollateral(bytes memory _actionArgs) private {
         (bytes32 marketId, uint256 collateralAmount) = __decodeRemoveCollateralActionArgs(_actionArgs);
 
-        __validateMarketId({_marketId: marketId});
-
         // Remove the collateral
         MORPHO_BLUE.withdrawCollateral({
             _marketParams: MORPHO_BLUE.idToMarketParams({_id: marketId}),
@@ -190,8 +190,6 @@ contract MorphoBluePositionLib is
     /// @dev Helper to repay a borrowed asset from a Morpho Blue lending market
     function __repay(bytes memory _actionsArgs) private {
         (bytes32 marketId, uint256 repayAmount) = __decodeRepayActionArgs(_actionsArgs);
-
-        __validateMarketId({_marketId: marketId});
 
         IMorphoBlue.MarketParams memory marketParams = MORPHO_BLUE.idToMarketParams({_id: marketId});
 
@@ -265,6 +263,10 @@ contract MorphoBluePositionLib is
         bytes32[] memory marketIdsMem = getMarketIds();
 
         for (uint256 i; i < marketIdsMem.length; i++) {
+            // No need to call __validateMarketId() here, since:
+            // - getManagedAssets() is always called by ComptrollerProxy in the same tx
+            // - collateral is always present when debt is
+
             // Skip if there is no borrowed value
             if (MORPHO_BLUE.position({_id: marketIdsMem[i], _user: address(this)}).borrowShares == 0) {
                 continue;
@@ -307,6 +309,8 @@ contract MorphoBluePositionLib is
             if (position.supplyShares == 0 && position.collateral == 0) {
                 continue;
             }
+
+            __validateMarketId({_marketId: marketIdsMem[i]});
 
             IMorphoBlue.MarketParams memory marketParams = MORPHO_BLUE.idToMarketParams({_id: marketIdsMem[i]});
 
