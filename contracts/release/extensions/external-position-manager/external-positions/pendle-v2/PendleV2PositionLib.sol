@@ -319,12 +319,16 @@ contract PendleV2PositionLib is
         // Ignore any PT and LP tokens held by this contract, as a precaution.
         for (uint256 i; i < rewardTokenAddresses.length; i++) {
             IERC20 rewardToken = IERC20(rewardTokenAddresses[i]);
+            uint256 rewardTokenBalance = rewardToken.balanceOf(address(this));
 
-            if (principalTokens.contains(address(rewardToken)) || lpTokens.contains(address(rewardToken))) {
+            if (
+                rewardTokenBalance == 0 || principalTokens.contains(address(rewardToken))
+                    || lpTokens.contains(address(rewardToken))
+            ) {
                 continue;
             }
 
-            rewardToken.safeTransfer(msg.sender, rewardToken.balanceOf(address(this)));
+            rewardToken.safeTransfer(msg.sender, rewardTokenBalance);
         }
     }
 
