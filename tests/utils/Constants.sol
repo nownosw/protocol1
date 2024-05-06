@@ -31,6 +31,7 @@ abstract contract Constants {
     // `ETHEREUM_BLOCK_LATEST` can be increased as-needed, and should be used in all tests
     // that should generally continue to pass regardless of block.
     uint256 internal constant ETHEREUM_BLOCK_LATEST = 18040000; // Sept 1st, 2023
+    uint256 internal constant ETHEREUM_BLOCK_ALICE_BLUE_TIME_SENSITIVE = 19770400; // April 30th, 2024
     uint256 internal constant ETHEREUM_BLOCK_MORPHO_BLUE_TIME_SENSITIVE = 19300000; // Feb 3rd, 2024
     uint256 internal constant ETHEREUM_BLOCK_PENDLE_TIME_SENSITIVE = 19300000; // Feb 3rd, 2024
     uint256 internal constant ETHEREUM_BLOCK_TERM_FINANCE_TIME_SENSITIVE = 18554000; // Nov 12th, 2023

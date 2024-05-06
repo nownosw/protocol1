@@ -162,6 +162,8 @@ IPendleV2PositionLib.sol: PendleV2PositionLib.abi.json
 IPendleV2PositionParser.sol: PendleV2PositionParser.abi.json
 IMorphoBluePositionLib.sol: MorphoBluePositionLib.abi.json
 IMorphoBluePositionParser.sol: MorphoBluePositionParser.abi.json
+IAlicePositionLib.sol: AlicePositionLib.abi.json
+IAlicePositionParser.sol: AlicePositionParser.abi.json
 
 # Value interpreter
 IValueInterpreter.sol: ValueInterpreter.abi.json
