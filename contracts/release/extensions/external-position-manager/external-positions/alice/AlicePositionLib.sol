@@ -79,10 +79,9 @@ contract AlicePositionLib is IAlicePosition, AlicePositionLibBase1, AssetHelpers
             WRAPPED_NATIVE_TOKEN.withdraw(placeOrderArgs.quantityToSell);
         } else {
             // Approve the spend asset
-            __approveAssetMaxAsNeeded({
-                _asset: outgoingAssetAddress,
-                _target: address(ALICE_ORDER_MANAGER),
-                _neededAmount: placeOrderArgs.quantityToSell
+            IERC20(outgoingAssetAddress).safeApprove({
+                _spender: address(ALICE_ORDER_MANAGER),
+                _value: placeOrderArgs.quantityToSell
             });
         }
 
