@@ -216,7 +216,7 @@ abstract contract IntegrationTest is CoreUtils {
 
         address simulatedUsdAddress = address(deployUsdEthSimulatedAggregator(config.chainlinkEthUsdAggregatorAddress));
 
-        CorePrimitiveInput[] memory corePrimitives = new CorePrimitiveInput[](5);
+        CorePrimitiveInput[] memory corePrimitives = new CorePrimitiveInput[](7);
         // System primitives
         corePrimitives[0] = CorePrimitiveInput({
             symbol: "WMATIC",
@@ -248,6 +248,18 @@ abstract contract IntegrationTest is CoreUtils {
             assetAddress: POLYGON_WBTC,
             aggregatorAddress: POLYGON_WBTC_USD_AGGREGATOR,
             rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.USD
+        });
+        corePrimitives[5] = CorePrimitiveInput({
+            symbol: "DAI",
+            assetAddress: POLYGON_DAI,
+            aggregatorAddress: POLYGON_DAI_ETH_AGGREGATOR,
+            rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.ETH
+        });
+        corePrimitives[6] = CorePrimitiveInput({
+            symbol: "USDT",
+            assetAddress: POLYGON_USDT,
+            aggregatorAddress: POLYGON_USDT_ETH_AGGREGATOR,
+            rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.ETH
         });
 
         __addCorePrimitives(corePrimitives);
