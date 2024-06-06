@@ -344,8 +344,8 @@ abstract contract CurveAndConvexPoolTest is PoolTestBase {
         // This will actually guarantee coverage of native asset handling, so long as one such pool has 2 assets.
         uint256 finalIndex = poolAssetAddresses.length - 1;
         uint256[] memory orderedOutgoingAssetAmounts = new uint256[](poolAssetAddresses.length);
-        orderedOutgoingAssetAmounts[0] = assetUnit(IERC20(poolAssetAddresses[0])) * 100;
-        orderedOutgoingAssetAmounts[finalIndex] = assetUnit(IERC20(poolAssetAddresses[finalIndex])) * 111;
+        orderedOutgoingAssetAmounts[0] = assetUnit(IERC20(poolAssetAddresses[0])) * 3;
+        orderedOutgoingAssetAmounts[finalIndex] = assetUnit(IERC20(poolAssetAddresses[finalIndex])) * 5;
         uint256 minIncomingStakingTokenAmount = 123;
 
         address[] memory spendAssetAddresses = toArray(poolAssetAddresses[0], poolAssetAddresses[finalIndex]);

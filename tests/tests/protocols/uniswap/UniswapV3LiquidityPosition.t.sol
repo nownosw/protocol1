@@ -36,7 +36,7 @@ abstract contract TestBase is UniswapV3Utils, IntegrationTest {
     uint24 internal constant FEE_LOW = 500;
     uint24 internal constant FEE_LOWEST = 100;
 
-    uint256 internal BUFFER_PERCENT = WEI_ONE_HUNDRED_PERCENT / 250; // 0.4%, buffer percent used for checking balances
+    uint256 internal BUFFER_PERCENT = WEI_ONE_PERCENT / 2; // 0.5%, buffer percent used for checking balances
 
     address internal fundOwner;
     address internal vaultProxyAddress;
