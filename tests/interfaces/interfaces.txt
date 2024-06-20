@@ -183,6 +183,7 @@ IChainlinkPriceFeedMixin.sol: ChainlinkPriceFeedMixin.abi.json
 IERC4626PriceFeed.sol: ERC4626PriceFeed.abi.json
 IArrakisV2PriceFeed.sol: ArrakisV2PriceFeed.abi.json
 IEtherFiEthPriceFeed.sol: EtherFiEthPriceFeed.abi.json
+IUsdEthSimulatedAggregator.sol: UsdEthSimulatedAggregator.abi.json
 IPeggedDerivativesPriceFeed.sol: PeggedDerivativesPriceFeed.abi.json
 
 # Protocol fee

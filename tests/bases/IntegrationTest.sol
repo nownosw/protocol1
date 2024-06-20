@@ -668,6 +668,18 @@ abstract contract IntegrationTest is CoreUtils {
         }
     }
 
+    function getUsdEthSimulatedAggregatorForVersion(EnzymeVersion _version)
+        internal
+        view
+        returns (address usdEthSimulatedAggregator_)
+    {
+        if (_version == EnzymeVersion.V4) {
+            return address(v4ReleaseContracts.usdEthSimulatedAggregator);
+        }
+
+        return address(symbolToCoreToken["USD"]);
+    }
+
     // v4 actions: fund creation
 
     // Create simple fund that can trade, but no fees or policies
@@ -729,5 +741,21 @@ abstract contract IntegrationTest is CoreUtils {
         }
 
         return aggregators_;
+    }
+
+    // Versioned routers: value interpreter helpers
+
+    function assertValueInUSDForVersion(EnzymeVersion _version, address _asset, uint256 _amount, uint256 _expected)
+        internal
+    {
+        IValueInterpreter valueInterpreter = IValueInterpreter(getValueInterpreterAddressForVersion(_version));
+
+        uint256 actual = valueInterpreter.calcCanonicalAssetValue({
+            _baseAsset: _asset,
+            _amount: _amount,
+            _quoteAsset: getUsdEthSimulatedAggregatorForVersion(_version)
+        });
+
+        assertEq(actual, _expected, "assertValueInUSDForVersion: Value not equal");
     }
 }
