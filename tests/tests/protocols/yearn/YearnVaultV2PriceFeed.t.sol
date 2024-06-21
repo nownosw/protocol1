@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.19;
 
+import {IChainlinkPriceFeedMixin as IChainlinkPriceFeedMixinProd} from
+    "contracts/release/infrastructure/price-feeds/primitives/IChainlinkPriceFeedMixin.sol";
+
 import {IntegrationTest} from "tests/bases/IntegrationTest.sol";
 
 import {IERC20} from "tests/interfaces/external/IERC20.sol";
 import {IYearnVaultV2Vault} from "tests/interfaces/external/IYearnVaultV2Vault.sol";
 
-import {IYearnVaultV2PriceFeed} from "tests/interfaces/internal/IYearnVaultV2PriceFeed.sol";
 import {IFundDeployer} from "tests/interfaces/internal/IFundDeployer.sol";
+import {IValueInterpreter} from "tests/interfaces/internal/IValueInterpreter.sol";
+import {IYearnVaultV2PriceFeed} from "tests/interfaces/internal/IYearnVaultV2PriceFeed.sol";
 
 import {
     ETHEREUM_YEARN_VAULT_V2_REGISTRY,
@@ -30,6 +34,11 @@ abstract contract YearnVaultV2PriceFeedTestBase is IntegrationTest {
         priceFeed = __deployPriceFeed();
     }
 
+    function __renitialize(uint256 _forkBlock) private {
+        setUpMainnetEnvironment(_forkBlock);
+        priceFeed = __deployPriceFeed();
+    }
+
     // DEPLOYMENT HELPERS
 
     function __deployPriceFeed() private returns (IYearnVaultV2PriceFeed priceFeed_) {
@@ -42,38 +51,88 @@ abstract contract YearnVaultV2PriceFeedTestBase is IntegrationTest {
 
     // TEST HELPERS
 
-    function __test_calcUnderlyingValues_success(address _derivative, uint256 _derivativeAmount) internal {
-        address[] memory underlyings = toArray(address(IYearnVaultV2Vault(_derivative).token()));
-
+    function __prankFundDeployerOwner() internal {
         vm.prank(IFundDeployer(getFundDeployerAddressForVersion({_version: version})).getOwner());
-        priceFeed.addDerivatives({_derivatives: toArray(_derivative), _underlyings: underlyings});
-
-        uint256 expectedUnderlyingValue =
-            _derivativeAmount * IYearnVaultV2Vault(_derivative).pricePerShare() / assetUnit(IERC20(_derivative));
-
-        (address[] memory underlyingAddresses, uint256[] memory underlyingValues) =
-            priceFeed.calcUnderlyingValues({_derivative: _derivative, _derivativeAmount: _derivativeAmount});
-
-        assertEq(underlyings, underlyingAddresses, "Mismatch between actual and expected underlying address");
-        assertEq(
-            toArray(expectedUnderlyingValue), underlyingValues, "Mismatch between actual and expected underlying value"
-        );
     }
 
     // TESTS
 
-    function test_calcUnderlyingValuesNon18DecimalsAsset_success() public {
-        __test_calcUnderlyingValues_success({
-            _derivative: ETHEREUM_YEARN_VAULT_V2_USDT_VAULT,
-            _derivativeAmount: 3 * assetUnit(IERC20(ETHEREUM_YEARN_VAULT_V2_USDT_VAULT))
+    function test_calcUnderlyingValues18Decimals_success() public {
+        __renitialize(18057000);
+
+        __prankFundDeployerOwner();
+        priceFeed.addDerivatives({
+            _derivatives: toArray(ETHEREUM_YEARN_VAULT_V2_WETH_VAULT),
+            _underlyings: toArray(ETHEREUM_WETH)
+        });
+
+        addDerivative({
+            _valueInterpreter: IValueInterpreter(getValueInterpreterAddressForVersion(version)),
+            _tokenAddress: ETHEREUM_YEARN_VAULT_V2_WETH_VAULT,
+            _skipIfRegistered: false,
+            _priceFeedAddress: address(priceFeed)
+        });
+
+        assertValueInUSDForVersion({
+            _version: version,
+            _asset: ETHEREUM_YEARN_VAULT_V2_WETH_VAULT,
+            _amount: assetUnit(IERC20(ETHEREUM_YEARN_VAULT_V2_WETH_VAULT)),
+            _expected: 1701235600035248949641 // 1701.2356000352488 USD
         });
     }
 
-    function test_calcUnderlyingValues18DecimalsAsset_success() public {
-        __test_calcUnderlyingValues_success({
-            _derivative: ETHEREUM_YEARN_VAULT_V2_WETH_VAULT,
-            _derivativeAmount: 12 * assetUnit(IERC20(ETHEREUM_YEARN_VAULT_V2_WETH_VAULT))
+    function test_calcUnderlyingValuesNon18Decimals_success() public {
+        __renitialize(18056000);
+
+        __prankFundDeployerOwner();
+        priceFeed.addDerivatives({
+            _derivatives: toArray(ETHEREUM_YEARN_VAULT_V2_USDT_VAULT),
+            _underlyings: toArray(ETHEREUM_USDT)
         });
+
+        addDerivative({
+            _valueInterpreter: IValueInterpreter(getValueInterpreterAddressForVersion(version)),
+            _tokenAddress: ETHEREUM_YEARN_VAULT_V2_USDT_VAULT,
+            _skipIfRegistered: false,
+            _priceFeedAddress: address(priceFeed)
+        });
+
+        assertValueInUSDForVersion({
+            _version: version,
+            _asset: ETHEREUM_YEARN_VAULT_V2_USDT_VAULT,
+            _amount: assetUnit(IERC20(ETHEREUM_YEARN_VAULT_V2_USDT_VAULT)),
+            _expected: 1022772823199456796 // 1.0227728231994568 USD
+        });
+    }
+
+    function test_calcUnderlyingValuesInvariant_success() public {
+        __prankFundDeployerOwner();
+        priceFeed.addDerivatives({
+            _derivatives: toArray(ETHEREUM_YEARN_VAULT_V2_USDT_VAULT),
+            _underlyings: toArray(ETHEREUM_USDT)
+        });
+
+        addDerivative({
+            _valueInterpreter: IValueInterpreter(getValueInterpreterAddressForVersion(version)),
+            _tokenAddress: ETHEREUM_YEARN_VAULT_V2_USDT_VAULT,
+            _skipIfRegistered: false,
+            _priceFeedAddress: address(priceFeed)
+        });
+
+        uint256 value = IValueInterpreter(getValueInterpreterAddressForVersion(version)).calcCanonicalAssetValue({
+            _baseAsset: ETHEREUM_YEARN_VAULT_V2_USDT_VAULT,
+            _amount: assetUnit(IERC20(ETHEREUM_YEARN_VAULT_V2_USDT_VAULT)),
+            _quoteAsset: ETHEREUM_USDT
+        });
+
+        uint256 underlyingSingleUnit = assetUnit(IERC20(ETHEREUM_USDT));
+
+        assertGe(value, underlyingSingleUnit, "Value is less than underlying single unit");
+        assertLe(
+            value,
+            underlyingSingleUnit + underlyingSingleUnit * 4 * BPS_ONE_PERCENT / BPS_ONE_HUNDRED_PERCENT, // allowed deviation of 4%
+            "Value is more than underlying upper limit"
+        );
     }
 
     function test_calcUnderlyingValues_failUnsupportedDerivative() public {
@@ -84,7 +143,7 @@ abstract contract YearnVaultV2PriceFeedTestBase is IntegrationTest {
     function test_isSupportedAsset_success() public {
         assertFalse(priceFeed.isSupportedAsset({_asset: ETHEREUM_YEARN_VAULT_V2_USDT_VAULT}), "Supported token");
 
-        vm.prank(IFundDeployer(getFundDeployerAddressForVersion({_version: version})).getOwner());
+        __prankFundDeployerOwner();
 
         expectEmit(address(priceFeed));
         emit DerivativeAdded(ETHEREUM_YEARN_VAULT_V2_USDT_VAULT, ETHEREUM_USDT);
@@ -98,7 +157,7 @@ abstract contract YearnVaultV2PriceFeedTestBase is IntegrationTest {
     }
 
     function test_addDerivates_failInvalidYVaultForUnderlying() public {
-        vm.prank(IFundDeployer(getFundDeployerAddressForVersion({_version: version})).getOwner());
+        __prankFundDeployerOwner();
         vm.expectRevert("__validateDerivative: Invalid yVault for underlying");
         priceFeed.addDerivatives({
             _derivatives: toArray(ETHEREUM_YEARN_VAULT_V2_WETH_VAULT),
@@ -107,7 +166,7 @@ abstract contract YearnVaultV2PriceFeedTestBase is IntegrationTest {
     }
 
     function test_addDerivates_failIncongruentDecimals() public {
-        vm.prank(IFundDeployer(getFundDeployerAddressForVersion({_version: version})).getOwner());
+        __prankFundDeployerOwner();
         vm.mockCall({
             callee: ETHEREUM_YEARN_VAULT_V2_USDT_VAULT,
             data: abi.encodeWithSignature("decimals()"),
