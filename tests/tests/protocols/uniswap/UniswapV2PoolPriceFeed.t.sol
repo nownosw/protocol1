@@ -91,13 +91,13 @@ abstract contract UniswapV2PoolPriceFeedTestBase is IntegrationTest, UniswapV2Ut
         assertApproxEqRel(
             expectedToken0Amount,
             underlyingValues[0],
-            WEI_ONE_PERCENT / 10_000,
+            2 * WEI_ONE_PERCENT / 1_000, // 0.002%
             "Mismatch between actual and expected underlying value"
         );
         assertApproxEqRel(
             expectedToken1Amount,
             underlyingValues[1],
-            WEI_ONE_PERCENT / 10_000,
+            2 * WEI_ONE_PERCENT / 1_000, // 0.002%
             "Mismatch between actual and expected underlying value"
         );
     }

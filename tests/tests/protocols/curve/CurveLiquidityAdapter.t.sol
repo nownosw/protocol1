@@ -536,7 +536,7 @@ abstract contract CurvePoolTest is CurveAndConvexPoolTest {
 
 abstract contract EthereumCurvePoolTest is CurvePoolTest {
     function setUp() public virtual override {
-        setUpMainnetEnvironment(ETHEREUM_BLOCK_TEMP_TIME_SENSITIVE);
+        setUpMainnetEnvironment();
 
         crvToken = IERC20(ETHEREUM_CRV);
 

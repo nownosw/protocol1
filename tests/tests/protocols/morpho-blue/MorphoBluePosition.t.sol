@@ -52,12 +52,11 @@ abstract contract MorphoBlueTestBase is IntegrationTest {
         EnzymeVersion _version,
         address _morphoBlueAddress,
         bytes32 _morphoBlueMarketId,
-        uint256 _chainId,
-        uint256 _forkBlock
+        uint256 _chainId
     ) internal {
         version = _version;
 
-        setUpNetworkEnvironment({_chainId: _chainId, _forkBlock: _forkBlock});
+        setUpNetworkEnvironment({_chainId: _chainId});
 
         listOwner = makeAddr("AllowedMorphoBlueVaultsListOwner");
         marketId = _morphoBlueMarketId;
@@ -614,8 +613,7 @@ contract MorphoBlueUsdcWethTestEthereum is MorphoBlueTestBase {
             _version: EnzymeVersion.Current,
             _morphoBlueAddress: ETHEREUM_MORPHO_BLUE,
             _morphoBlueMarketId: ETHEREUM_MORPHO_USDC_WETH_MARKET,
-            _chainId: ETHEREUM_CHAIN_ID,
-            _forkBlock: ETHEREUM_BLOCK_MORPHO_BLUE_TIME_SENSITIVE
+            _chainId: ETHEREUM_CHAIN_ID
         });
     }
 }
@@ -626,8 +624,7 @@ contract MorphoBlueUsdcWethTestEthereumV4 is MorphoBlueTestBase {
             _version: EnzymeVersion.V4,
             _morphoBlueAddress: ETHEREUM_MORPHO_BLUE,
             _morphoBlueMarketId: ETHEREUM_MORPHO_USDC_WETH_MARKET,
-            _chainId: ETHEREUM_CHAIN_ID,
-            _forkBlock: ETHEREUM_BLOCK_MORPHO_BLUE_TIME_SENSITIVE
+            _chainId: ETHEREUM_CHAIN_ID
         });
     }
 }

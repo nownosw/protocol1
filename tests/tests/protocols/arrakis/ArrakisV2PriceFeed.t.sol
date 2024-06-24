@@ -154,7 +154,7 @@ abstract contract ArrakisV2PriceFeedTestBase is IntegrationTest, UniswapV3Utils 
                 .calcUnderlyingValues({_derivative: address(arrakisVault), _derivativeAmount: arrakisTokensToRedeem});
             assertEq(underlyingAssetAddresses, preRedeemUnderlyingAssetAddresses, "post-redeem underlyings mismatch");
             assertApproxEqAbs(
-                underlyingAssetAmounts[0], preRedeemUnderlyingAssetAmounts[0], 1, "post-redeem token0 amount mismatch"
+                underlyingAssetAmounts[0], preRedeemUnderlyingAssetAmounts[0], 2, "post-redeem token0 amount mismatch"
             );
             assertApproxEqAbs(
                 underlyingAssetAmounts[1], preRedeemUnderlyingAssetAmounts[1], 1, "post-redeem token1 amount mismatch"

@@ -260,7 +260,7 @@ abstract contract RegistryTest is TestBase {
 
 contract EthereumTest is ValueTest, RegistryTest {
     function setUp() public override {
-        setUpMainnetEnvironment(ETHEREUM_BLOCK_LATEST_TIME_SENSITIVE);
+        setUpMainnetEnvironment();
 
         // Define pools to use throughout
         poolFactoryAddress = ETHEREUM_USDC_DAI_USDT_POOL_FACTORY_ADDRESS;
@@ -279,7 +279,7 @@ contract EthereumTest is ValueTest, RegistryTest {
 
 contract PolygonTest is ValueTest, RegistryTest {
     function setUp() public override {
-        setUpPolygonEnvironment(POLYGON_BLOCK_LATEST_TIME_SENSITIVE);
+        setUpPolygonEnvironment();
 
         // Define pools to use throughout
         poolFactoryAddress = POLYGON_wMATIC_stMATIC_POOL_FACTORY_ADDRESS;

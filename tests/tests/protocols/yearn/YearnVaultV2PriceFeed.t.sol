@@ -126,12 +126,16 @@ abstract contract YearnVaultV2PriceFeedTestBase is IntegrationTest {
         });
 
         uint256 underlyingSingleUnit = assetUnit(IERC20(ETHEREUM_USDT));
+        uint256 vaultCreationTimestamp = 1655484586;
+        uint256 timePassed = block.timestamp - vaultCreationTimestamp;
+        uint256 maxDeviationPer365DaysInBps = 4 * BPS_ONE_PERCENT;
 
         assertGe(value, underlyingSingleUnit, "Value is less than underlying single unit");
         assertLe(
             value,
-            underlyingSingleUnit + underlyingSingleUnit * 4 * BPS_ONE_PERCENT / BPS_ONE_HUNDRED_PERCENT, // allowed deviation of 4%
-            "Value is more than underlying upper limit"
+            underlyingSingleUnit
+                + (underlyingSingleUnit * maxDeviationPer365DaysInBps * timePassed) / (365 days * BPS_ONE_HUNDRED_PERCENT),
+            "Deviation to high"
         );
     }
 

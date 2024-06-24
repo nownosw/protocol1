@@ -717,7 +717,7 @@ contract AaveV3DebtPositionTestEthereum is AaveV3DebtPositionTest {
     }
 
     function test_setUseReserveAsCollateral_success() public {
-        __test_setUseReserveAsCollateral_success({_underlying: ETHEREUM_BAL});
+        __test_setUseReserveAsCollateral_success({_underlying: ETHEREUM_USDT});
     }
 
     function __test_removeCollateral_success(bool _toUnderlying) internal {

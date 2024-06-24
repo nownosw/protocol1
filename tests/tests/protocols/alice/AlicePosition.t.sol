@@ -57,12 +57,11 @@ abstract contract AliceTestBase is IntegrationTest {
         EnzymeVersion _version,
         address _aliceOrderManagerAddress,
         uint16 _instrumentId,
-        uint256 _chainId,
-        uint256 _forkBlock
+        uint256 _chainId
     ) internal {
         version = _version;
 
-        setUpNetworkEnvironment({_chainId: _chainId, _forkBlock: _forkBlock});
+        setUpNetworkEnvironment({_chainId: _chainId});
 
         externalPositionManager = IExternalPositionManager(getExternalPositionManagerAddressForVersion(version));
         aliceTypeId = deployAlice({
@@ -657,8 +656,7 @@ contract AliceWbtcUsdcTestEthereum is AliceTestBase {
             _version: EnzymeVersion.Current,
             _aliceOrderManagerAddress: ETHEREUM_ALICE_ORDER_MANAGER,
             _instrumentId: ETHEREUM_ALICE_WBTC_USDC_INSTRUMENT_ID,
-            _chainId: ETHEREUM_CHAIN_ID,
-            _forkBlock: ETHEREUM_BLOCK_ALICE_BLUE_TIME_SENSITIVE
+            _chainId: ETHEREUM_CHAIN_ID
         });
     }
 }
@@ -669,8 +667,7 @@ contract AliceWbtcUsdcTestEthereumV4 is AliceTestBase {
             _version: EnzymeVersion.V4,
             _aliceOrderManagerAddress: ETHEREUM_ALICE_ORDER_MANAGER,
             _instrumentId: ETHEREUM_ALICE_WBTC_USDC_INSTRUMENT_ID,
-            _chainId: ETHEREUM_CHAIN_ID,
-            _forkBlock: ETHEREUM_BLOCK_ALICE_BLUE_TIME_SENSITIVE
+            _chainId: ETHEREUM_CHAIN_ID
         });
     }
 }
@@ -682,8 +679,7 @@ contract AliceEthUsdcTestEthereum is AliceTestBase {
             _version: EnzymeVersion.Current,
             _aliceOrderManagerAddress: ETHEREUM_ALICE_ORDER_MANAGER,
             _instrumentId: ETHEREUM_ALICE_ETH_USDC_INSTRUMENT_ID,
-            _chainId: ETHEREUM_CHAIN_ID,
-            _forkBlock: ETHEREUM_BLOCK_ALICE_BLUE_TIME_SENSITIVE
+            _chainId: ETHEREUM_CHAIN_ID
         });
     }
 }
@@ -694,8 +690,7 @@ contract AliceEthUsdcTestEthereumV4 is AliceTestBase {
             _version: EnzymeVersion.V4,
             _aliceOrderManagerAddress: ETHEREUM_ALICE_ORDER_MANAGER,
             _instrumentId: ETHEREUM_ALICE_ETH_USDC_INSTRUMENT_ID,
-            _chainId: ETHEREUM_CHAIN_ID,
-            _forkBlock: ETHEREUM_BLOCK_ALICE_BLUE_TIME_SENSITIVE
+            _chainId: ETHEREUM_CHAIN_ID
         });
     }
 }

@@ -770,8 +770,8 @@ contract CompoundV2DebtPositionTestEthereum is CompoundV2DebtPositionTest {
 
     function test_claimComp_success() public {
         __test_claimComp_success({
-            _cTokens: toArray(ETHEREUM_COMPOUND_V2_CUSDC),
-            _amounts: toArray(10_000 * assetUnit(IERC20(ETHEREUM_COMPOUND_V2_CUSDC)))
+            _cTokens: toArray(ETHEREUM_COMPOUND_V2_CDAI),
+            _amounts: toArray(10_000 * assetUnit(IERC20(ETHEREUM_COMPOUND_V2_CDAI)))
         });
     }
 }
