@@ -78,8 +78,20 @@ abstract contract WstethPriceFeedTestBase is IntegrationTest {
             _quoteAsset: ETHEREUM_STETH
         });
 
+        uint256 wstETHCreationTimestamp = 1613752640;
+        uint256 timePassed = block.timestamp - wstETHCreationTimestamp;
+        uint256 maxDeviationPer365DaysInBps = 6 * BPS_ONE_PERCENT;
+
+        uint256 underlyingSingleUnit = assetUnit(IERC20(ETHEREUM_STETH));
+
         // 1 WSTETH value must be always greater than 1 stETH
-        assertGt(value, assetUnit(IERC20(ETHEREUM_STETH)), "Incorrect value");
+        assertGt(value, underlyingSingleUnit, "Value to low");
+        assertLe(
+            value,
+            underlyingSingleUnit
+                + (underlyingSingleUnit * maxDeviationPer365DaysInBps * timePassed) / (365 days * BPS_ONE_HUNDRED_PERCENT),
+            "Deviation to high"
+        );
     }
 
     function test_isSupportedAsset_success() public {
