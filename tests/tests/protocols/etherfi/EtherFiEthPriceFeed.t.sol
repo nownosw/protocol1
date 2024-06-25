@@ -15,7 +15,6 @@ address constant ETHERFI_ETH_ADDRESS = 0x35fA164735182de50811E8e2E824cFb9B6118ac
 address constant WRAPPED_ETHERFI_ETH_ADDRESS = 0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee;
 address constant WRAPPED_ETHERFI_ETH_AGGREGATOR = 0x8751F736E94F6CD167e8C5B97E245680FbD9CC36;
 uint256 constant WRAPPED_ETHERFI_ETH_CREATION_BLOCK_TIMESTAMP = 1689005159;
-uint256 constant MINIMUM_REQUIRED_BLOCK_FOR_WEETH_AGGREGATOR = 18827300;
 
 abstract contract EtherFiEthPriceFeedTestBase is IntegrationTest {
     IEtherFiEthPriceFeed internal priceFeed;
@@ -23,11 +22,7 @@ abstract contract EtherFiEthPriceFeedTestBase is IntegrationTest {
     EnzymeVersion internal version;
 
     function __initialize(EnzymeVersion _version) internal {
-        setUpMainnetEnvironment(
-            ETHEREUM_BLOCK_LATEST < MINIMUM_REQUIRED_BLOCK_FOR_WEETH_AGGREGATOR
-                ? MINIMUM_REQUIRED_BLOCK_FOR_WEETH_AGGREGATOR
-                : ETHEREUM_BLOCK_LATEST
-        );
+        setUpMainnetEnvironment();
         version = _version;
         priceFeed = __deployPriceFeed();
     }
