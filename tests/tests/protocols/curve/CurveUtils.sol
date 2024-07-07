@@ -25,15 +25,24 @@ abstract contract CurveUtils is AddOnUtilsBase {
     address internal constant ETHEREUM_STETH_NG_POOL_ADDRESS = 0x21E27a5E5513D6e65C4f830167390997aA84843a;
     address internal constant ETHEREUM_STETH_NG_POOL_GAUGE_TOKEN_ADDRESS = 0x79F21BC30632cd40d2aF8134B469a0EB4C9574AA;
     address internal constant ETHEREUM_STETH_NG_POOL_LP_TOKEN_ADDRESS = 0x21E27a5E5513D6e65C4f830167390997aA84843a;
-    // TODO: metapool
+    // metapool
+    address internal constant ETHEREUM_META_POOL_ADDRESS = 0xB30dA2376F63De30b42dC055C93fa474F31330A5;
+    address internal constant ETHEREUM_META_POOL_GAUGE_TOKEN_ADDRESS = 0x740BA8aa0052E07b925908B380248cb03f3DE5cB;
+    address internal constant ETHEREUM_META_POOL_LP_TOKEN_ADDRESS = 0xB30dA2376F63De30b42dC055C93fa474F31330A5;
+    // basepool
+    address internal constant ETHEREUM_BASE_POOL_ADDRESS = 0x0Ce6a5fF5217e38315f87032CF90686C96627CAA;
+    address internal constant ETHEREUM_BASE_POOL_GAUGE_TOKEN_ADDRESS = 0x90Bb609649E0451E5aD952683D64BD2d1f245840;
+    address internal constant ETHEREUM_BASE_POOL_LP_TOKEN_ADDRESS = 0x194eBd173F6cDacE046C53eACcE9B953F28411d1;
 
     // Pools: Polygon
     // underlyings (aave-style)
     address internal constant POLYGON_AAVE_POOL_ADDRESS = 0x445FE580eF8d70FF569aB36e80c647af338db351;
     address internal constant POLYGON_AAVE_POOL_GAUGE_TOKEN_ADDRESS = 0x19793B454D3AfC7b454F206Ffe95aDE26cA6912c;
     address internal constant POLYGON_AAVE_POOL_LP_TOKEN_ADDRESS = 0xE7a24EF0C5e95Ffb0f6684b813A78F2a3AD7D171;
+    // metapool
+    address internal constant POLYGON_META_POOL_ADDRESS = 0x53C38755748745e2dd7D0a136FBCC9fB1A5B83b2;
+    address internal constant POLYGON_META_POOL_LP_TOKEN_ADDRESS = 0x53C38755748745e2dd7D0a136FBCC9fB1A5B83b2;
     // TODO: native asset
-    // TODO: metapool
 
     function deployPriceFeed(
         IFundDeployer _fundDeployer,
