@@ -77,12 +77,6 @@ abstract contract CurvePriceFeedTestBase is CurveUtils, IntegrationTest {
 
         addDerivative({
             _valueInterpreter: IValueInterpreter(getValueInterpreterAddressForVersion(version)),
-            _tokenAddress: _gaugeToken,
-            _skipIfRegistered: false,
-            _priceFeedAddress: address(priceFeed)
-        });
-        addDerivative({
-            _valueInterpreter: IValueInterpreter(getValueInterpreterAddressForVersion(version)),
             _tokenAddress: _lpToken,
             _skipIfRegistered: false,
             _priceFeedAddress: address(priceFeed)
@@ -94,12 +88,23 @@ abstract contract CurvePriceFeedTestBase is CurveUtils, IntegrationTest {
             _quoteAsset: address(wethToken)
         });
 
-        uint256 gaugeTokenValue = IValueInterpreter(getValueInterpreterAddressForVersion(version))
-            .calcCanonicalAssetValue({
-            _baseAsset: _gaugeToken,
-            _amount: assetUnit(IERC20(_gaugeToken)),
-            _quoteAsset: address(wethToken)
-        });
+        if (_gaugeToken != address(0)) {
+            addDerivative({
+                _valueInterpreter: IValueInterpreter(getValueInterpreterAddressForVersion(version)),
+                _tokenAddress: _gaugeToken,
+                _skipIfRegistered: false,
+                _priceFeedAddress: address(priceFeed)
+            });
+
+            uint256 gaugeTokenValue = IValueInterpreter(getValueInterpreterAddressForVersion(version))
+                .calcCanonicalAssetValue({
+                _baseAsset: _gaugeToken,
+                _amount: assetUnit(IERC20(_gaugeToken)),
+                _quoteAsset: address(wethToken)
+            });
+
+            assertEq(lpTokenValue, gaugeTokenValue, "LP token and gauge token values don't match");
+        }
 
         uint256 invariantProxyAssetValue = IValueInterpreter(getValueInterpreterAddressForVersion(version))
             .calcCanonicalAssetValue({
@@ -109,8 +114,6 @@ abstract contract CurvePriceFeedTestBase is CurveUtils, IntegrationTest {
         });
 
         uint256 timePassed = block.timestamp - _poolCreationTimestamp;
-
-        assertEq(lpTokenValue, gaugeTokenValue, "LP token and gauge token values don't match");
 
         assertGe(lpTokenValue, invariantProxyAssetValue, "LP token value is less than invariant proxy asset value");
         assertLe(
@@ -671,6 +674,48 @@ abstract contract CurvePriceFeedTestPolygonBase is CurvePriceFeedTestBase {
     }
 }
 
+abstract contract CurvePriceFeedTestArbitrumBase is CurvePriceFeedTestBase {
+    function __initialize(EnzymeVersion _version) internal {
+        __initialize({
+            _version: _version,
+            _chainId: ARBITRUM_CHAIN_ID,
+            _addressProviderAddress: ADDRESS_PROVIDER_ADDRESS,
+            _poolOwnerAddress: ARBITRUM_POOL_OWNER_ADDRESS
+        });
+    }
+
+    function test_calcUnderlyingValues2Pool_success() public {
+        __test_calcUnderlyingValues_success({
+            _pool: ARBITRUM_2POOL_ADDRESS,
+            _invariantProxyAsset: getUsdEthSimulatedAggregatorForVersion(version),
+            _lpToken: ARBITRUM_2POOL_LP_TOKEN_ADDRESS,
+            _gaugeToken: address(0),
+            _poolCreationTimestamp: 1631449040,
+            _allowedDeviationPer365DaysInBps: 5 * BPS_ONE_PERCENT
+        });
+    }
+
+    function test_addPoolsNoGauges_success() public {
+        __test_addPools_success({
+            _pools: toArray(ARBITRUM_2POOL_ADDRESS),
+            _reentrantVirtualPrices: toArray(false),
+            _lpTokens: toArray(ARBITRUM_2POOL_LP_TOKEN_ADDRESS),
+            _gaugeTokens: toArray(address(0)),
+            _validatePools: true
+        });
+    }
+
+    function test_addPoolsWithoutValidation_success() public {
+        __test_addPools_success({
+            _pools: toArray(ARBITRUM_2POOL_ADDRESS),
+            _reentrantVirtualPrices: toArray(true),
+            _lpTokens: toArray(address(createTestToken())),
+            _gaugeTokens: toArray(address(createTestToken())),
+            _validatePools: false
+        });
+    }
+}
+
 contract CurvePriceFeedTestEthereum is CurvePriceFeedTestEthereumBase {
     function setUp() public override {
         __initialize(EnzymeVersion.Current);
@@ -683,7 +728,7 @@ contract CurvePriceFeedTestEthereumV4 is CurvePriceFeedTestEthereumBase {
     }
 }
 
-contract CurvePriceFeedTestPolygon is CurvePriceFeedTestPolygonBase {
+contract CurvePriceFeArbitrum is CurvePriceFeedTestPolygonBase {
     function setUp() public override {
         __initialize(EnzymeVersion.Current);
     }
@@ -694,3 +739,16 @@ contract CurvePriceFeedTestPolygonV4 is CurvePriceFeedTestPolygonBase {
         __initialize(EnzymeVersion.V4);
     }
 }
+
+contract CurvePriceFeedTestArbitrum is CurvePriceFeedTestArbitrumBase {
+    function setUp() public override {
+        __initialize(EnzymeVersion.Current);
+    }
+}
+
+// TODO: Uncomment once Enzyme Arbitrum deployment is live
+// contract CurvePriceFeedTestArbitrumV4 is CurvePriceFeedTestArbitrumBase {
+//     function setUp() public override {
+//         __initialize(EnzymeVersion.V4);
+//     }
+// }

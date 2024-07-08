@@ -15,6 +15,7 @@ abstract contract CurveUtils is AddOnUtilsBase {
     address internal constant ETHEREUM_MINTER_ADDRESS = 0xd061D61a4d941c39E5453435B6345Dc261C2fcE0;
     address internal constant ETHEREUM_POOL_OWNER_ADDRESS = 0xeCb456EA5365865EbAb8a2661B0c503410e9B347;
     address internal constant POLYGON_POOL_OWNER_ADDRESS = 0x774D1Dba98cfBD1F2Bc3A1F59c494125e07C48F9;
+    address internal constant ARBITRUM_POOL_OWNER_ADDRESS = 0xd4F94D0aaa640BBb72b5EEc2D85F6D114D81a88E;
 
     // Pools: Ethereum
     // underlyings (aave-style)
@@ -43,6 +44,10 @@ abstract contract CurveUtils is AddOnUtilsBase {
     address internal constant POLYGON_META_POOL_ADDRESS = 0x53C38755748745e2dd7D0a136FBCC9fB1A5B83b2;
     address internal constant POLYGON_META_POOL_LP_TOKEN_ADDRESS = 0x53C38755748745e2dd7D0a136FBCC9fB1A5B83b2;
     // TODO: native asset
+
+    // Pools: Arbitrum
+    address internal constant ARBITRUM_2POOL_ADDRESS = 0x7f90122BF0700F9E7e1F688fe926940E8839F353;
+    address internal constant ARBITRUM_2POOL_LP_TOKEN_ADDRESS = 0x7f90122BF0700F9E7e1F688fe926940E8839F353;
 
     function deployPriceFeed(
         IFundDeployer _fundDeployer,

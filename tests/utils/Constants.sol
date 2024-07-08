@@ -18,6 +18,7 @@ abstract contract Constants {
     // Network ChainIDs
     uint256 internal constant ETHEREUM_CHAIN_ID = 1;
     uint256 internal constant POLYGON_CHAIN_ID = 137;
+    uint256 internal constant ARBITRUM_CHAIN_ID = 42161;
 
     // Miscellaneous
     uint8 internal constant CHAINLINK_AGGREGATOR_DECIMALS_ETH = 18;
@@ -35,6 +36,8 @@ abstract contract Constants {
     uint256 internal constant ETHEREUM_BLOCK_TERM_FINANCE_TIME_SENSITIVE = 18554000; // Nov 12th, 2023
 
     uint256 internal constant POLYGON_BLOCK_LATEST = 54900000; // March 21st, 2024
+
+    uint256 internal constant ARBITRUM_BLOCK_LATEST = 220000000; // June 9th, 2024
 
     // Network assets
     address internal constant NATIVE_ASSET_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -77,6 +80,17 @@ abstract contract Constants {
     address internal constant POLYGON_WETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
     address internal constant POLYGON_WMATIC = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
 
+    address internal constant ARBITRUM_BAL = 0x040d1EdC9569d4Bab2D15287Dc5A4F10F56a56B8;
+    address internal constant ARBITRUM_CRV = 0x11cDb42B0EB46D95f990BeDD4695A6e3fA034978;
+    address internal constant ARBITRUM_DAI = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
+    address internal constant ARBITRUM_EETH = 0x35fA164735182de50811E8e2E824cFb9B6118ac2;
+    address internal constant ARBITRUM_LINK = 0xf97f4df75117a78c1A5a0DBb814Af92458539FB4;
+    address internal constant ARBITRUM_MLN = 0x8f5c1A99b1df736Ad685006Cb6ADCA7B7Ae4b514;
+    address internal constant ARBITRUM_USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+    address internal constant ARBITRUM_USDT = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
+    address internal constant ARBITRUM_WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
+    address internal constant ARBITRUM_WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+
     // Network Chainlink aggregators
     address internal constant ETHEREUM_BAL_ETH_AGGREGATOR = 0xC1438AA3823A6Ba0C159CfA8D98dF5A994bA120b;
     address internal constant ETHEREUM_DAI_ETH_AGGREGATOR = 0x773616E4d11A78F511299002da57A0a94577F1f4;
@@ -93,4 +107,13 @@ abstract contract Constants {
     address internal constant POLYGON_USDC_USD_AGGREGATOR = 0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7;
     address internal constant POLYGON_USDT_ETH_AGGREGATOR = 0xf9d5AAC6E5572AEFa6bd64108ff86a222F69B64d;
     address internal constant POLYGON_WBTC_USD_AGGREGATOR = 0xDE31F8bFBD8c84b5360CFACCa3539B938dd78ae6;
+
+    address internal constant ARBITRUM_ETH_USD_AGGREGATOR = 0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612;
+    address internal constant ARBITRUM_BAL_USD_AGGREGATOR = 0xBE5eA816870D11239c543F84b71439511D70B94f;
+    address internal constant ARBITRUM_CRV_USD_AGGREGATOR = 0xaebDA2c976cfd1eE1977Eac079B4382acb849325;
+    address internal constant ARBITRUM_DAI_USD_AGGREGATOR = 0xc5C8E77B397E531B8EC06BFb0048328B30E9eCfB;
+    // TODO: Replace with actual MLN/ETH aggregator.
+    address internal constant ARBITRUM_MLN_ETH_AGGREGATOR = 0xb7c8Fb1dB45007F98A68Da0588e1AA524C317f27;
+    address internal constant ARBITRUM_USDC_USD_AGGREGATOR = 0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3;
+    address internal constant ARBITRUM_USDT_USD_AGGREGATOR = 0x3f3f5dF88dC9F13eac63DF89EC16ef6e7E25DdE7;
 }

@@ -50,6 +50,7 @@ jobs:
         env:
           ETHEREUM_NODE_MAINNET: ${{ secrets.ETHEREUM_NODE_MAINNET }}
           ETHEREUM_NODE_POLYGON: ${{ secrets.ETHEREUM_NODE_POLYGON }}
+          ETHEREUM_NODE_ARBITRUM: ${{ secrets.ETHEREUM_NODE_ARBITRUM }}
 
       - name: Check linting & formatting
         run: make lint

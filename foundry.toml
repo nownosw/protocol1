@@ -37,6 +37,7 @@ yul = false
 [rpc_endpoints]
 mainnet = "${ETHEREUM_NODE_MAINNET}"
 polygon = "${ETHEREUM_NODE_POLYGON}"
+arbitrum = "${ETHEREUM_NODE_ARBITRUM}"
 
 [etherscan]
 mainnet = { key = "${ETHERSCAN_API_KEY_MAINNET}", chain = "mainnet" }

@@ -65,3 +65,8 @@ function getPolygonDeployment() pure returns (Contracts memory) {
         usdEthSimulatedAggregator: IUsdEthSimulatedAggregator(0x51e75b5E0eef2d40B4D70C5dAa2666E1eA30F0Bd)
     });
 }
+
+// TODO: Replace with actual values
+function getArbitrumDeployment() pure returns (Contracts memory contracts_) {
+    return contracts_;
+}

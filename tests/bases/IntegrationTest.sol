@@ -10,18 +10,21 @@ import {TestChainlinkAggregator} from "tests/utils/core/AssetUniverseUtils.sol";
 import {
     Contracts as PersistentContracts,
     getMainnetDeployment as getMainnetPersistentContracts,
-    getPolygonDeployment as getPolygonPersistentContracts
+    getPolygonDeployment as getPolygonPersistentContracts,
+    getArbitrumDeployment as getArbitrumPersistentContracts
 } from "tests/utils/core/deployment/PersistentContracts.sol";
 import {ReleaseConfig} from "tests/utils/core/deployment/DeploymentUtils.sol";
 import {
     Contracts as V4ReleaseContracts,
     getMainnetDeployment as getV4MainnetReleaseContracts,
-    getPolygonDeployment as getV4PolygonReleaseContracts
+    getPolygonDeployment as getV4PolygonReleaseContracts,
+    getArbitrumDeployment as getV4ArbitrumReleaseContracts
 } from "tests/utils/core/deployment/V4ReleaseContracts.sol";
 import {
     Contracts as ReleaseContracts,
     getMainnetDeployment as getMainnetReleaseContracts,
-    getPolygonDeployment as getPolygonReleaseContracts
+    getPolygonDeployment as getPolygonReleaseContracts,
+    getArbitrumDeployment as getArbitrumReleaseContracts
 } from "tests/utils/core/deployment/V5ReleaseContracts.sol";
 
 import {IERC20} from "tests/interfaces/external/IERC20.sol";
@@ -92,6 +95,16 @@ abstract contract IntegrationTest is CoreUtils {
         // core.release = getPolygonReleaseContracts();
     }
 
+    function setUpLiveArbitrumEnvironment(uint256 _forkBlock) internal {
+        vm.createSelectFork("polygon", _forkBlock);
+
+        core.persistent = getArbitrumPersistentContracts();
+        v4ReleaseContracts = getV4ArbitrumReleaseContracts();
+
+        // No v5 release live
+        // core.release = getArbitrumReleaseContracts();
+    }
+
     // Partially-live deployments (persistent layer only)
 
     function setUpLiveMainnetEnvironmentWithNewRelease(uint256 _forkBlock) internal {
@@ -110,12 +123,22 @@ abstract contract IntegrationTest is CoreUtils {
         __setUpEnvironment({_config: getDefaultPolygonConfig(), _persistentContractsAlreadySet: true});
     }
 
+    function setUpLiveArbitrumEnvironmentWithNewRelease(uint256 _forkBlock) internal {
+        vm.createSelectFork("arbitrum", _forkBlock);
+
+        core.persistent = getArbitrumPersistentContracts();
+
+        __setUpEnvironment({_config: getDefaultArbitrumConfig(), _persistentContractsAlreadySet: true});
+    }
+
     // New deployments
     function setUpNetworkEnvironment(uint256 _chainId) internal {
         if (_chainId == ETHEREUM_CHAIN_ID) {
             setUpMainnetEnvironment();
         } else if (_chainId == POLYGON_CHAIN_ID) {
             setUpPolygonEnvironment();
+        } else if (_chainId == ARBITRUM_CHAIN_ID) {
+            setUpArbitrumEnvironment();
         } else {
             revert("setUpNetworkEnvironment: Unsupported network");
         }
@@ -126,6 +149,8 @@ abstract contract IntegrationTest is CoreUtils {
             setUpMainnetEnvironment(_forkBlock);
         } else if (_chainId == POLYGON_CHAIN_ID) {
             setUpPolygonEnvironment(_forkBlock);
+        } else if (_chainId == ARBITRUM_CHAIN_ID) {
+            setUpArbitrumEnvironment(_forkBlock);
         } else {
             revert("setUpNetworkEnvironment: Unsupported network");
         }
@@ -137,6 +162,10 @@ abstract contract IntegrationTest is CoreUtils {
 
     function setUpPolygonEnvironment() internal {
         setUpPolygonEnvironment(POLYGON_BLOCK_LATEST);
+    }
+
+    function setUpArbitrumEnvironment() internal {
+        setUpArbitrumEnvironment(ARBITRUM_BLOCK_LATEST);
     }
 
     function setUpMainnetEnvironment(uint256 _forkBlock) internal {
@@ -260,6 +289,66 @@ abstract contract IntegrationTest is CoreUtils {
             assetAddress: POLYGON_USDT,
             aggregatorAddress: POLYGON_USDT_ETH_AGGREGATOR,
             rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.ETH
+        });
+
+        __addCorePrimitives(corePrimitives);
+    }
+
+    function setUpArbitrumEnvironment(uint256 _forkBlock) internal {
+        vm.createSelectFork("arbitrum", _forkBlock);
+
+        v4ReleaseContracts = getV4ArbitrumReleaseContracts();
+
+        ReleaseConfig memory config = getDefaultArbitrumConfig();
+
+        __setUpEnvironment({_config: config, _persistentContractsAlreadySet: false});
+
+        // Deploy minimal asset universe
+
+        // Treat WETH specially and directly add to coreTokens storage (does not require an aggregator)
+        symbolToCoreToken["WETH"] = IERC20(wethToken);
+        tokenToIsCore[IERC20(wethToken)] = true;
+
+        address simulatedUsdAddress = address(deployUsdEthSimulatedAggregator(config.chainlinkEthUsdAggregatorAddress));
+
+        CorePrimitiveInput[] memory corePrimitives = new CorePrimitiveInput[](6);
+        // System primitives
+        corePrimitives[0] = CorePrimitiveInput({
+            symbol: "MLN",
+            assetAddress: ARBITRUM_MLN,
+            aggregatorAddress: ARBITRUM_MLN_ETH_AGGREGATOR,
+            rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.ETH
+        });
+        // Extra primitives
+        corePrimitives[1] = CorePrimitiveInput({
+            symbol: "USD",
+            assetAddress: simulatedUsdAddress,
+            aggregatorAddress: simulatedUsdAddress,
+            rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.ETH
+        });
+        corePrimitives[2] = CorePrimitiveInput({
+            symbol: "USDC",
+            assetAddress: ARBITRUM_USDC,
+            aggregatorAddress: ARBITRUM_USDC_USD_AGGREGATOR,
+            rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.USD
+        });
+        corePrimitives[3] = CorePrimitiveInput({
+            symbol: "BAL",
+            assetAddress: ARBITRUM_BAL,
+            aggregatorAddress: ARBITRUM_BAL_USD_AGGREGATOR,
+            rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.USD
+        });
+        corePrimitives[4] = CorePrimitiveInput({
+            symbol: "USDT",
+            assetAddress: ARBITRUM_USDT,
+            aggregatorAddress: ARBITRUM_USDT_USD_AGGREGATOR,
+            rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.USD
+        });
+        corePrimitives[5] = CorePrimitiveInput({
+            symbol: "DAI",
+            assetAddress: ARBITRUM_DAI,
+            aggregatorAddress: ARBITRUM_DAI_USD_AGGREGATOR,
+            rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.USD
         });
 
         __addCorePrimitives(corePrimitives);
@@ -413,6 +502,30 @@ abstract contract IntegrationTest is CoreUtils {
             mlnTokenAddress: POLYGON_MLN,
             wethTokenAddress: POLYGON_WETH,
             wrappedNativeTokenAddress: POLYGON_WMATIC,
+            // Gas relayer
+            gasRelayDepositCooldown: 1 days,
+            gasRelayDepositMaxTotal: 1 ether,
+            gasRelayFeeMaxPercent: 10,
+            gasRelayHubAddress: address(0), // TODO: lookup real value
+            gasRelayRelayFeeMaxBase: 0,
+            gasRelayTrustedForwarderAddress: address(0), // TODO: lookup real value
+            // Vault settings
+            vaultMlnBurner: mlnBurner,
+            vaultPositionsLimit: 20
+        });
+    }
+
+    function getDefaultArbitrumConfig() internal returns (ReleaseConfig memory) {
+        address mlnBurner = makeAddr("MlnBurner");
+
+        return ReleaseConfig({
+            // Chainlink
+            chainlinkEthUsdAggregatorAddress: ARBITRUM_ETH_USD_AGGREGATOR,
+            chainlinkStaleRateThreshold: 3650 days,
+            // Tokens
+            mlnTokenAddress: ARBITRUM_MLN,
+            wethTokenAddress: ARBITRUM_WETH,
+            wrappedNativeTokenAddress: ARBITRUM_WETH,
             // Gas relayer
             gasRelayDepositCooldown: 1 days,
             gasRelayDepositMaxTotal: 1 ether,
