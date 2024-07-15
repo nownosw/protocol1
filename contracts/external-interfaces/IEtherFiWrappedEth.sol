@@ -14,5 +14,5 @@ pragma solidity >=0.6.0 <0.9.0;
 /// @title IEtherFiWrappedEth Interface
 /// @author Enzyme Council <security@enzyme.finance>
 interface IEtherFiWrappedEth {
-    function getEETHByWeETH(uint256 _weETHAmount) external view returns (uint256 _eETHAmount_);
+    function getWeETHByeETH(uint256 _eETHAmount) external view returns (uint256 weETHAmount_);
 }

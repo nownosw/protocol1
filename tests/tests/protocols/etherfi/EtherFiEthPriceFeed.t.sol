@@ -40,31 +40,20 @@ abstract contract EtherFiEthPriceFeedTestBase is IntegrationTest {
         return IEtherFiEthPriceFeed(addr);
     }
 
-    function __deploySimulatedAggregator(
-        address _originalAggregatorAddress,
-        IChainlinkPriceFeedMixinProd.RateAsset _rateAsset
-    ) private returns (address aggregator_) {
-        bytes memory args = abi.encode(_originalAggregatorAddress, _rateAsset);
-        return deployCode("NonStandardPrecisionSimulatedAggregator.sol", args);
-    }
-
     // MISC HELPERS
 
     function __addDerivativeAndUnderlying() private {
         addPrimitive({
             _valueInterpreter: IValueInterpreter(getValueInterpreterAddressForVersion(version)),
             _tokenAddress: WRAPPED_ETHERFI_ETH_ADDRESS,
-            _skipIfRegistered: true,
-            _aggregatorAddress: __deploySimulatedAggregator({
-                _originalAggregatorAddress: WRAPPED_ETHERFI_ETH_AGGREGATOR,
-                _rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.ETH
-            }),
+            _skipIfRegistered: false,
+            _aggregatorAddress: ETHEREUM_WEETH_ETH_AGGREGATOR,
             _rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.ETH
         });
         addDerivative({
             _valueInterpreter: IValueInterpreter(getValueInterpreterAddressForVersion(version)),
             _tokenAddress: ETHERFI_ETH_ADDRESS,
-            _skipIfRegistered: true,
+            _skipIfRegistered: false,
             _priceFeedAddress: address(priceFeed)
         });
     }
@@ -76,34 +65,26 @@ abstract contract EtherFiEthPriceFeedTestBase is IntegrationTest {
 
         __addDerivativeAndUnderlying();
 
+        // EETH/USD price on June 21st 2024. https://www.coingecko.com/en/coins/ether-fi-staked-eth/historical_data
         assertValueInUSDForVersion({
             _version: version,
             _asset: ETHERFI_ETH_ADDRESS,
             _amount: assetUnit(IERC20(ETHERFI_ETH_ADDRESS)),
-            _expected: 3772086445223782594543 // 3772.086445223782594543 USD
+            _expected: 3478411761024683833154 // 3478.411761024683833154 USD
         });
     }
 
     function test_calcUnderlyingValuesInvariant_success() public {
         __addDerivativeAndUnderlying();
 
-        uint256 value = IValueInterpreter(getValueInterpreterAddressForVersion(version)).calcCanonicalAssetValue({
+        uint256 eETHvalue = IValueInterpreter(getValueInterpreterAddressForVersion(version)).calcCanonicalAssetValue({
             _baseAsset: ETHERFI_ETH_ADDRESS,
             _amount: assetUnit(IERC20(ETHERFI_ETH_ADDRESS)),
-            _quoteAsset: WRAPPED_ETHERFI_ETH_ADDRESS
+            _quoteAsset: address(wethToken)
         });
 
-        uint256 underlyingSingleUnit = assetUnit(IERC20(WRAPPED_ETHERFI_ETH_ADDRESS));
-        uint256 timePassed = block.timestamp - WRAPPED_ETHERFI_ETH_CREATION_BLOCK_TIMESTAMP;
-        uint256 maxDeviationPer365DaysInBps = 7 * BPS_ONE_PERCENT;
-
-        assertGt(value, underlyingSingleUnit, "Value too low");
-        assertLe(
-            value,
-            underlyingSingleUnit
-                + (underlyingSingleUnit * maxDeviationPer365DaysInBps * timePassed) / (365 days * BPS_ONE_HUNDRED_PERCENT),
-            "Deviation too high"
-        );
+        // eETH should be worth approximately 1ETH
+        assertApproxEqRel(eETHvalue, assetUnit(wethToken), WEI_ONE_PERCENT / 5);
     }
 
     function test_isSupportedAsset_success() public {

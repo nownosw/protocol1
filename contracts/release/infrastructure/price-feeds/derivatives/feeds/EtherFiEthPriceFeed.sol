@@ -39,7 +39,7 @@ contract EtherFiEthPriceFeed is IDerivativePriceFeed {
         underlyings_[0] = address(WEETH_CONTRACT);
 
         underlyingAmounts_ = new uint256[](1);
-        underlyingAmounts_[0] = WEETH_CONTRACT.getEETHByWeETH({_weETHAmount: _derivativeAmount});
+        underlyingAmounts_[0] = WEETH_CONTRACT.getWeETHByeETH({_eETHAmount: _derivativeAmount});
 
         return (underlyings_, underlyingAmounts_);
     }
