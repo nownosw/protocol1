@@ -3,7 +3,7 @@ pragma solidity 0.8.19;
 
 import {UnitTest} from "tests/bases/UnitTest.sol";
 import {IPendleV2Market} from "tests/interfaces/external/IPendleV2Market.sol";
-import {IPendleV2PtAndLpOracle} from "tests/interfaces/external/IPendleV2PtAndLpOracle.sol";
+import {IPendleV2PyYtLpOracle} from "tests/interfaces/external/IPendleV2PyYtLpOracle.sol";
 import {IPendleV2MarketRegistry} from "tests/interfaces/internal/IPendleV2MarketRegistry.sol";
 import {PendleV2Utils} from "./PendleV2Utils.sol";
 
@@ -12,7 +12,7 @@ contract PendleV2MarketRegistryTest is UnitTest, PendleV2Utils {
     event PtForUserUpdated(address indexed user, address indexed ptAddress, address indexed marketAddress);
 
     IPendleV2MarketRegistry registry;
-    address mockPendlePtAndLpOracleAddress = makeAddr("MockPendlePtAndLpOracle");
+    address mockPendleOracleAddress = makeAddr("MockPendleOracle");
     address mockMarketAddress = makeAddr("MockMarket");
     address mockMarketAddress2 = makeAddr("MockMarket2");
     address mockPtAddress = makeAddr("MockPT");
@@ -34,15 +34,15 @@ contract PendleV2MarketRegistryTest is UnitTest, PendleV2Utils {
         __updateOracleState({increaseCardinalityRequired: false, oldestObservationSatisfied: true});
 
         // Deploy the registry with a mock oracle
-        registry = __deployPendleV2MarketRegistry({_pendlePtAndLpOracleAddress: mockPendlePtAndLpOracleAddress});
+        registry = __deployPendleV2MarketRegistry({_pendleOracleAddress: mockPendleOracleAddress});
     }
 
     // MISC HELPERS
 
     function __updateOracleState(bool increaseCardinalityRequired, bool oldestObservationSatisfied) internal {
         vm.mockCall({
-            callee: mockPendlePtAndLpOracleAddress,
-            data: abi.encodeWithSelector(IPendleV2PtAndLpOracle.getOracleState.selector),
+            callee: mockPendleOracleAddress,
+            data: abi.encodeWithSelector(IPendleV2PyYtLpOracle.getOracleState.selector),
             returnData: abi.encode(increaseCardinalityRequired, false, oldestObservationSatisfied)
         });
     }

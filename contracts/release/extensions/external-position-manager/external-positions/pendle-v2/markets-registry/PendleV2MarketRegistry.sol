@@ -14,7 +14,7 @@ pragma solidity 0.8.19;
 import {IDispatcher} from "../../../../../../persistent/dispatcher/IDispatcher.sol";
 import {IPendleV2Market} from "../../../../../../external-interfaces/IPendleV2Market.sol";
 import {IPendleV2PrincipalToken} from "../../../../../../external-interfaces/IPendleV2PrincipalToken.sol";
-import {IPendleV2PtAndLpOracle} from "../../../../../../external-interfaces/IPendleV2PtAndLpOracle.sol";
+import {IPendleV2PyYtLpOracle} from "../../../../../../external-interfaces/IPendleV2PyYtLpOracle.sol";
 import {IPendleV2MarketRegistry} from "./IPendleV2MarketRegistry.sol";
 
 /// @title PendleV2MarketRegistry Contract
@@ -27,13 +27,13 @@ contract PendleV2MarketRegistry is IPendleV2MarketRegistry {
 
     error InsufficientOracleState(bool increaseCardinalityRequired, bool oldestObservationSatisfied);
 
-    IPendleV2PtAndLpOracle private immutable PENDLE_PT_AND_LP_ORACLE;
+    IPendleV2PyYtLpOracle private immutable PENDLE_ORACLE;
 
     mapping(address => mapping(address => uint32)) private userToMarketToOracleDuration;
     mapping(address => mapping(address => address)) private userToPtToLinkedMarket;
 
-    constructor(IPendleV2PtAndLpOracle _pendlePtAndLpOracle) {
-        PENDLE_PT_AND_LP_ORACLE = _pendlePtAndLpOracle;
+    constructor(IPendleV2PyYtLpOracle _pendlePyYtLpOracleAddress) {
+        PENDLE_ORACLE = _pendlePyYtLpOracleAddress;
     }
 
     /// @notice Updates the market registry specific to the caller
@@ -83,10 +83,10 @@ contract PendleV2MarketRegistry is IPendleV2MarketRegistry {
     /// @dev Helper to validate user-input market config.
     /// Only validates the recommended oracle state,
     /// not whether duration provides a sufficiently secure TWAP price.
-    /// src: https://docs.pendle.finance/Developers/Integration/HowToIntegratePtAndLpOracle.
+    /// src: https://docs.pendle.finance/Developers/Oracles/HowToIntegratePtAndLpOracle.
     function __validateMarketConfig(address _marketAddress, uint32 _duration) private view {
         (bool increaseCardinalityRequired,, bool oldestObservationSatisfied) =
-            PENDLE_PT_AND_LP_ORACLE.getOracleState({_market: _marketAddress, _duration: _duration});
+            PENDLE_ORACLE.getOracleState({_market: _marketAddress, _duration: _duration});
 
         if (increaseCardinalityRequired || !oldestObservationSatisfied) {
             revert InsufficientOracleState(increaseCardinalityRequired, oldestObservationSatisfied);

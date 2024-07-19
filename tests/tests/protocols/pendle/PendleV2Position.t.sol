@@ -3,15 +3,11 @@ pragma solidity 0.8.19;
 
 import {IPendleV2Position as IPendleV2PositionProd} from
     "contracts/release/extensions/external-position-manager/external-positions/pendle-v2/IPendleV2Position.sol";
-import {PendleLpOracleLib} from "contracts/utils/0.8.19/pendle/adapted-libs/PendleLpOracleLib.sol";
-import {IPendleV2Market as IOracleLibPendleMarket} from
-    "contracts/utils/0.8.19/pendle/adapted-libs/interfaces/IPendleV2Market.sol";
-
 import {IntegrationTest} from "tests/bases/IntegrationTest.sol";
 import {IERC20} from "tests/interfaces/external/IERC20.sol";
 import {IPendleV2Market} from "tests/interfaces/external/IPendleV2Market.sol";
 import {IPendleV2PrincipalToken} from "tests/interfaces/external/IPendleV2PrincipalToken.sol";
-import {IPendleV2PtAndLpOracle} from "tests/interfaces/external/IPendleV2PtAndLpOracle.sol";
+import {IPendleV2PyYtLpOracle} from "tests/interfaces/external/IPendleV2PyYtLpOracle.sol";
 import {IPendleV2StandardizedYield} from "tests/interfaces/external/IPendleV2StandardizedYield.sol";
 import {IPendleV2Router} from "tests/interfaces/external/IPendleV2Router.sol";
 import {IComptrollerLib} from "tests/interfaces/internal/IComptrollerLib.sol";
@@ -26,10 +22,17 @@ import {PendleV2Utils} from "./PendleV2Utils.sol";
 // ETHEREUM MAINNET CONSTANTS
 address constant ETHEREUM_MARKET_FACTORY_V1 = 0x27b1dAcd74688aF24a64BD3C9C1B143118740784;
 address constant ETHEREUM_MARKET_FACTORY_V3 = 0x1A6fCc85557BC4fB7B534ed835a03EF056552D52;
-address constant ETHEREUM_PT_ORACLE = 0xbbd487268A295531d299c125F3e5f749884A3e30;
-address constant ETHEREUM_ROUTER = 0x00000000005BBB0EF59571E58418F9a4357b68A0;
+address constant ETHEREUM_PY_YT_LP_ORACLE = 0x9a9Fa8338dd5E5B2188006f1Cd2Ef26d921650C2;
+address constant ETHEREUM_ROUTER = 0x888888888889758F76e7103c6CbF23ABbF58F946;
 address constant ETHEREUM_STETH_26DEC2025_MARKET_ADDRESS = 0xC374f7eC85F8C7DE3207a10bB1978bA104bdA3B2;
 address constant ETHEREUM_WEETH_27JUN2024_MARKET_ADDRESS = 0xF32e58F92e60f4b0A37A69b95d642A471365EAe8;
+
+// ARBITRUM CONSTANTS
+address constant ARBITRUM_MARKET_FACTORY_V3 = 0x2FCb47B58350cD377f94d3821e7373Df60bD9Ced;
+address constant ARBITRUM_PY_YT_LP_ORACLE = 0x9a9Fa8338dd5E5B2188006f1Cd2Ef26d921650C2;
+address constant ARBITRUM_ROUTER = 0x888888888889758F76e7103c6CbF23ABbF58F946;
+address constant ARBITRUM_EETH_25SEPT2024_MARKET_ADDRESS = 0xf9F9779d8fF604732EBA9AD345E6A27EF5c2a9d6;
+address constant ARBITRUM_EZETH_25SEPT2024_MARKET_ADDRESS = 0x35f3dB08a6e9cB4391348b0B404F493E7ae264c0;
 
 uint256 constant ORACLE_RATE_PRECISION = 1e18;
 address constant PENDLE_NATIVE_ASSET_ADDRESS = address(0);
@@ -55,7 +58,7 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
     IERC20 internal underlyingAsset;
     IPendleV2Market internal market;
     IPendleV2PrincipalToken internal principalToken;
-    IPendleV2PtAndLpOracle internal pendlePtAndLpOracle;
+    IPendleV2PyYtLpOracle internal pendleOracle;
     IPendleV2Router internal pendleRouter;
     IPendleV2Router.ApproxParams internal guessPtOut;
     IPendleV2StandardizedYield internal syToken;
@@ -71,14 +74,14 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
 
     function __initialize(
         EnzymeVersion _version,
-        address _pendlePtAndLpOracleAddress,
+        address _pendleOracleAddress,
         address _pendleRouterAddress,
         address _pendleMarketAddress,
         uint32 _pricingDuration
     ) internal {
         // Assign vars from inputs
         version = _version;
-        pendlePtAndLpOracle = IPendleV2PtAndLpOracle(_pendlePtAndLpOracleAddress);
+        pendleOracle = IPendleV2PyYtLpOracle(_pendleOracleAddress);
         pendleRouter = IPendleV2Router(_pendleRouterAddress);
         market = IPendleV2Market(_pendleMarketAddress);
         pricingDuration = _pricingDuration;
@@ -90,7 +93,7 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
         // Assign other misc vars
         externalPositionManager = IExternalPositionManager(getExternalPositionManagerAddressForVersion(version));
         (syToken, principalToken,) = market.readTokens();
-        (, address underlyingAssetAddress,) = syToken.assetInfo();
+        address underlyingAssetAddress = syToken.yieldToken();
         // If underlyingAssetAddress is the 0 address, this indicates that the NATIVE_ASSET is the reference asset
         if (underlyingAssetAddress == PENDLE_NATIVE_ASSET_ADDRESS) {
             underlyingAssetAddress = address(wrappedNativeToken);
@@ -115,13 +118,14 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
 
         // Deploy and register all Pendle V2 contracts
         (pendleV2MarketRegistry, pendleV2PositionLib, pendleV2PositionParser, pendleV2TypeId) = deployPendleV2({
-            _pendlePtAndLpOracleAddress: _pendlePtAndLpOracleAddress,
+            _pendleOracleAddress: _pendleOracleAddress,
             _pendleRouterAddress: _pendleRouterAddress,
             _wrappedNativeAssetAddress: address(wrappedNativeToken)
         });
 
         // Create a fund and add an empty Pendle position
         (comptrollerProxyAddress, vaultProxyAddress, fundOwner) = createTradingFundForVersion(version);
+
         vm.prank(fundOwner);
         pendleV2ExternalPosition = IPendleV2PositionLib(
             createExternalPositionForVersion({
@@ -157,7 +161,7 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
     // DEPLOYMENT HELPERS
 
     function deployPendleV2(
-        address _pendlePtAndLpOracleAddress,
+        address _pendleOracleAddress,
         address _pendleRouterAddress,
         address _wrappedNativeAssetAddress
     )
@@ -169,11 +173,11 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
             uint256 typeId_
         )
     {
-        pendleV2MarketRegistry_ =
-            __deployPendleV2MarketRegistry({_pendlePtAndLpOracleAddress: _pendlePtAndLpOracleAddress});
+        pendleV2MarketRegistry_ = __deployPendleV2MarketRegistry({_pendleOracleAddress: _pendleOracleAddress});
 
         pendleV2PositionLib_ = deployPendleV2PositionLib({
             _pendleMarketRegistryAddress: address(pendleV2MarketRegistry_),
+            _pendleOracleAddress: _pendleOracleAddress,
             _pendleRouterAddress: _pendleRouterAddress,
             _wrappedNativeAssetAddress: _wrappedNativeAssetAddress
         });
@@ -192,10 +196,13 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
 
     function deployPendleV2PositionLib(
         address _pendleMarketRegistryAddress,
+        address _pendleOracleAddress,
         address _pendleRouterAddress,
         address _wrappedNativeAssetAddress
     ) public returns (IPendleV2PositionLib) {
-        bytes memory args = abi.encode(_pendleMarketRegistryAddress, _pendleRouterAddress, _wrappedNativeAssetAddress);
+        bytes memory args = abi.encode(
+            _pendleMarketRegistryAddress, _pendleOracleAddress, _pendleRouterAddress, _wrappedNativeAssetAddress
+        );
         address addr = deployCode("PendleV2PositionLib.sol", args);
         return IPendleV2PositionLib(addr);
     }
@@ -301,15 +308,17 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
         assertEq(toArray(address(principalToken)), pendleV2ExternalPosition.getPrincipalTokens());
 
         // Assert that the PrincipalToken value is accounted for in the EP
-        (, address expectedAsset,) = syToken.assetInfo();
+        address expectedAsset = syToken.yieldToken();
         uint256 principalTokenBalance = IERC20(address(principalToken)).balanceOf(address(pendleV2ExternalPosition));
 
         // Assert that there is some PT balance in the EP
         assertGt(principalTokenBalance, 0, "Incorrect principalToken balance");
 
-        uint256 expectedAssetAmount = principalTokenBalance
-            * pendlePtAndLpOracle.getPtToAssetRate({_market: address(market), _duration: pricingDuration})
-            / ORACLE_RATE_PRECISION;
+        uint256 expectedAssetAmount = syToken.previewRedeem({
+            _tokenOut: address(underlyingAsset),
+            _amountSharesToRedeem: principalTokenBalance
+                * pendleOracle.getPtToSyRate({_market: address(market), _duration: pricingDuration}) / ORACLE_RATE_PRECISION
+        });
 
         // Assert that the EP holds the principalToken
         (address[] memory assets, uint256[] memory amounts) = pendleV2ExternalPosition.getManagedAssets();
@@ -373,9 +382,11 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
             vm.warp(expiry + 1);
         }
 
-        uint256 expectedUnderlyingDelta = withdrawalAmount
-            * pendlePtAndLpOracle.getPtToAssetRate({_market: address(market), _duration: pricingDuration})
-            / ORACLE_RATE_PRECISION;
+        uint256 expectedUnderlyingDelta = syToken.previewRedeem({
+            _tokenOut: address(underlyingAsset),
+            _amountSharesToRedeem: withdrawalAmount
+                * pendleOracle.getPtToSyRate({_market: address(market), _duration: pricingDuration}) / ORACLE_RATE_PRECISION
+        });
 
         if (_sellAll) {
             // Expect the principalToken to be removed from the EP
@@ -476,11 +487,11 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
         // Assert that the LP token value is accounted for in the EP
         uint256 lpTokenBalance = IERC20(address(market)).balanceOf(address(pendleV2ExternalPosition));
 
-        uint256 expectedAssetAmount = lpTokenBalance
-            * PendleLpOracleLib.getLpToAssetRate({
-                market: IOracleLibPendleMarket(address(market)),
-                duration: pricingDuration
-            }) / ORACLE_RATE_PRECISION;
+        uint256 expectedAssetAmount = syToken.previewRedeem({
+            _tokenOut: address(underlyingAsset),
+            _amountSharesToRedeem: lpTokenBalance
+                * pendleOracle.getLpToSyRate({_market: address(market), _duration: pricingDuration}) / ORACLE_RATE_PRECISION
+        });
 
         // Assert that there is some LP balance in the EP
         assertGt(lpTokenBalance, 0, "Incorrect LP token balance");
@@ -522,11 +533,11 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
 
         uint256 preUnderlyingAssetBalance = underlyingAsset.balanceOf(vaultProxyAddress);
 
-        uint256 expectedUnderlyingDelta = withdrawalAmount
-            * PendleLpOracleLib.getLpToAssetRate({
-                market: IOracleLibPendleMarket(address(market)),
-                duration: pricingDuration
-            }) / ORACLE_RATE_PRECISION;
+        uint256 expectedUnderlyingDelta = syToken.previewRedeem({
+            _tokenOut: address(underlyingAsset),
+            _amountSharesToRedeem: withdrawalAmount
+                * pendleOracle.getLpToSyRate({_market: address(market), _duration: pricingDuration}) / ORACLE_RATE_PRECISION
+        });
 
         __removeLiquidity({_withdrawalAmount: withdrawalAmount});
 
@@ -683,7 +694,7 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
         assertEq(assetsThird, toArray(address(underlyingAsset)), "Incorrect managed assets");
 
         // Value of the EP should be roughly equal 2 deposit amounts (2x PT)
-        assertApproxEqRel(depositAmount * 2, amountsThird[0], WEI_ONE_PERCENT / 2);
+        assertApproxEqRel(depositAmount * 2, amountsThird[0], WEI_ONE_PERCENT);
     }
 
     function test_positionValue_failsWithZeroDurationForLpToken() public {
@@ -725,8 +736,24 @@ abstract contract PendleTestEthereum is PendleTestBase {
 
         __initialize({
             _version: _version,
-            _pendlePtAndLpOracleAddress: ETHEREUM_PT_ORACLE,
+            _pendleOracleAddress: ETHEREUM_PY_YT_LP_ORACLE,
             _pendleRouterAddress: ETHEREUM_ROUTER,
+            _pendleMarketAddress: _pendleMarketAddress,
+            _pricingDuration: _pricingDuration
+        });
+    }
+}
+
+abstract contract PendleTestArbitrum is PendleTestBase {
+    function __initializeArbitrum(EnzymeVersion _version, address _pendleMarketAddress, uint32 _pricingDuration)
+        internal
+    {
+        setUpArbitrumEnvironment();
+
+        __initialize({
+            _version: _version,
+            _pendleOracleAddress: ARBITRUM_PY_YT_LP_ORACLE,
+            _pendleRouterAddress: ARBITRUM_ROUTER,
             _pendleMarketAddress: _pendleMarketAddress,
             _pricingDuration: _pricingDuration
         });
@@ -776,3 +803,24 @@ contract PendleStethTestEthereumV4 is PendleTestEthereum {
         });
     }
 }
+
+contract PendleEzethTestArbitrum is PendleTestArbitrum {
+    function setUp() public override {
+        __initializeArbitrum({
+            _version: EnzymeVersion.Current,
+            _pendleMarketAddress: ARBITRUM_EZETH_25SEPT2024_MARKET_ADDRESS,
+            _pricingDuration: 900 // 15 minutes
+        });
+    }
+}
+
+// TODO: Uncomment once the v4 Arbitrum deployment is live
+// contract PendleEEthTestArbitrumV4 is PendleTestArbitrum {
+//     function setUp() public override {
+//         __initializeArbitrum({
+//             _version: EnzymeVersion.V4,
+//             _pendleMarketAddress: ARBITRUM_EZETH_25SEPT2024_MARKET_ADDRESS,
+//             _pricingDuration: 900 // 15 minutes
+//         });
+//     }
+// }

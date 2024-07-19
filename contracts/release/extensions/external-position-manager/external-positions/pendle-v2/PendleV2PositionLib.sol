@@ -12,16 +12,13 @@ pragma solidity 0.8.19;
 import {IERC20} from "../../../../../external-interfaces/IERC20.sol";
 import {IPendleV2Market} from "../../../../../external-interfaces/IPendleV2Market.sol";
 import {IPendleV2PrincipalToken} from "../../../../../external-interfaces/IPendleV2PrincipalToken.sol";
+import {IPendleV2PyYtLpOracle} from "../../../../../external-interfaces/IPendleV2PyYtLpOracle.sol";
 import {IPendleV2Router} from "../../../../../external-interfaces/IPendleV2Router.sol";
 import {IPendleV2StandardizedYield} from "../../../../../external-interfaces/IPendleV2StandardizedYield.sol";
 import {IWETH} from "../../../../../external-interfaces/IWETH.sol";
 import {IExternalPositionProxy} from "../../../../../persistent/external-positions/IExternalPositionProxy.sol";
 import {AddressArrayLib} from "../../../../../utils/0.8.19/AddressArrayLib.sol";
 import {AssetHelpers} from "../../../../../utils/0.8.19/AssetHelpers.sol";
-import {PendleLpOracleLib} from "../../../../../utils/0.8.19/pendle/adapted-libs/PendleLpOracleLib.sol";
-import {PendlePtOracleLib} from "../../../../../utils/0.8.19/pendle/adapted-libs/PendlePtOracleLib.sol";
-import {IPendleV2Market as IOracleLibPendleMarket} from
-    "../../../../../utils/0.8.19/pendle/adapted-libs/interfaces/IPendleV2Market.sol";
 import {WrappedSafeERC20 as SafeERC20} from "../../../../../utils/0.8.19/open-zeppelin/WrappedSafeERC20.sol";
 import {PendleV2PositionLibBase1} from "./bases/PendleV2PositionLibBase1.sol";
 import {IPendleV2MarketRegistry} from "./markets-registry/IPendleV2MarketRegistry.sol";
@@ -54,15 +51,18 @@ contract PendleV2PositionLib is
     address internal constant PENDLE_NATIVE_ASSET_ADDRESS = address(0);
 
     IPendleV2MarketRegistry internal immutable PENDLE_MARKET_REGISTRY;
+    IPendleV2PyYtLpOracle internal immutable PENDLE_ORACLE;
     IPendleV2Router internal immutable PENDLE_ROUTER;
     IWETH private immutable WRAPPED_NATIVE_ASSET;
 
     constructor(
         address _pendleMarketsRegistryAddress,
+        address _pendlePyYtLpOracleAddress,
         address _pendleRouterAddress,
         address _wrappedNativeAssetAddress
     ) {
         PENDLE_MARKET_REGISTRY = IPendleV2MarketRegistry(_pendleMarketsRegistryAddress);
+        PENDLE_ORACLE = IPendleV2PyYtLpOracle(_pendlePyYtLpOracleAddress);
         PENDLE_ROUTER = IPendleV2Router(_pendleRouterAddress);
         WRAPPED_NATIVE_ASSET = IWETH(_wrappedNativeAssetAddress);
     }
@@ -404,8 +404,8 @@ contract PendleV2PositionLib is
     //    Fund owners provide the TWAP duration to use for each position, via a registry contract (see contract-level natspec).
     //    Position pricing security and correctness will vary according to market liquidity and TWAP duration.
     //    Fund owners must consider these factors along with their fund's risk tolerance for share price deviations.
-    //    For more information on Pendle Principal Tokens pricing, see https://docs.pendle.finance/Developers/Integration/IntroductionOfPtOracle
-    //    For more information on Pendle LP Tokens pricing, see https://docs.pendle.finance/Developers/Integration/IntroductionOfLpOracle
+    //    For more information on Pendle Principal Tokens pricing, see https://docs.pendle.finance/Developers/Oracles/IntroductionOfPtOracle
+    //    For more information on Pendle LP Tokens pricing, see https://docs.pendle.finance/Developers/Oracles/IntroductionOfLpOracle
     // 2. The valuation of the External Positions fully excludes accrued rewards.
     //    To prevent significant underpricing, managers should claim rewards regularly.
 
@@ -467,12 +467,7 @@ contract PendleV2PositionLib is
 
         // Get the underlying token address
         (IPendleV2StandardizedYield syToken,,) = IPendleV2Market(_lpTokenAddress).readTokens();
-        (, underlyingToken_,) = syToken.assetInfo();
-
-        // If underlying is the native asset, replace with the wrapped native asset for pricing purposes
-        if (underlyingToken_ == PENDLE_NATIVE_ASSET_ADDRESS) {
-            underlyingToken_ = address(WRAPPED_NATIVE_ASSET);
-        }
+        underlyingToken_ = syToken.yieldToken();
 
         // Retrieve the registered oracle duration for the market
         uint32 duration = PENDLE_MARKET_REGISTRY.getMarketOracleDurationForUser({
@@ -481,10 +476,17 @@ contract PendleV2PositionLib is
         });
         require(duration > 0, "__getLpTokenValue: Duration not registered");
 
-        uint256 rate =
-            PendleLpOracleLib.getLpToAssetRate({market: IOracleLibPendleMarket(_lpTokenAddress), duration: duration});
+        uint256 rate = PENDLE_ORACLE.getLpToSyRate({_market: _lpTokenAddress, _duration: duration});
 
-        value_ = lpTokenBalance * rate / ORACLE_RATE_PRECISION;
+        value_ = syToken.previewRedeem({
+            _tokenOut: underlyingToken_,
+            _amountSharesToRedeem: (lpTokenBalance * rate / ORACLE_RATE_PRECISION)
+        });
+
+        // If underlying is the native asset, replace with the wrapped native asset for pricing purposes
+        if (underlyingToken_ == PENDLE_NATIVE_ASSET_ADDRESS) {
+            underlyingToken_ = address(WRAPPED_NATIVE_ASSET);
+        }
     }
 
     /// @dev Helper to get the value, in the underlying asset, of a principal token holding
@@ -496,13 +498,9 @@ contract PendleV2PositionLib is
         uint256 principalTokenBalance = IERC20(_principalTokenAddress).balanceOf(address(this));
 
         // Get the underlying token address
-        (, underlyingToken_,) =
-            IPendleV2StandardizedYield(IPendleV2PrincipalToken(_principalTokenAddress).SY()).assetInfo();
-
-        // If underlying is the native asset, replace with the wrapped native asset for pricing purposes
-        if (underlyingToken_ == PENDLE_NATIVE_ASSET_ADDRESS) {
-            underlyingToken_ = address(WRAPPED_NATIVE_ASSET);
-        }
+        IPendleV2StandardizedYield syToken =
+            IPendleV2StandardizedYield(IPendleV2PrincipalToken(_principalTokenAddress).SY());
+        underlyingToken_ = syToken.yieldToken();
 
         // Retrieve the registered oracle market and its duration
         (address marketAddress, uint32 duration) = PENDLE_MARKET_REGISTRY.getPtOracleMarketAndDurationForUser({
@@ -511,15 +509,23 @@ contract PendleV2PositionLib is
         });
         require(duration > 0, "__getPrincipalTokenValue: Duration not registered");
 
-        uint256 rate = PendlePtOracleLib.getPtToAssetRate({
-            market: IOracleLibPendleMarket(marketAddress),
-            duration: PENDLE_MARKET_REGISTRY.getMarketOracleDurationForUser({
+        uint256 rate = PENDLE_ORACLE.getPtToSyRate({
+            _market: marketAddress,
+            _duration: PENDLE_MARKET_REGISTRY.getMarketOracleDurationForUser({
                 _user: _vaultProxyAddress,
                 _marketAddress: marketAddress
             })
         });
 
-        value_ = principalTokenBalance * rate / ORACLE_RATE_PRECISION;
+        value_ = syToken.previewRedeem({
+            _tokenOut: underlyingToken_,
+            _amountSharesToRedeem: (principalTokenBalance * rate / ORACLE_RATE_PRECISION)
+        });
+
+        // If underlying is the native asset, replace with the wrapped native asset for pricing purposes
+        if (underlyingToken_ == PENDLE_NATIVE_ASSET_ADDRESS) {
+            underlyingToken_ = address(WRAPPED_NATIVE_ASSET);
+        }
 
         return (underlyingToken_, value_);
     }

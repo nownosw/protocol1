@@ -5,11 +5,8 @@ import {AddOnUtilsBase} from "tests/utils/bases/AddOnUtilsBase.sol";
 import {IPendleV2MarketRegistry} from "tests/interfaces/internal/IPendleV2MarketRegistry.sol";
 
 abstract contract PendleV2Utils is AddOnUtilsBase {
-    function __deployPendleV2MarketRegistry(address _pendlePtAndLpOracleAddress)
-        internal
-        returns (IPendleV2MarketRegistry)
-    {
-        bytes memory args = abi.encode(_pendlePtAndLpOracleAddress);
+    function __deployPendleV2MarketRegistry(address _pendleOracleAddress) internal returns (IPendleV2MarketRegistry) {
+        bytes memory args = abi.encode(_pendleOracleAddress);
         return IPendleV2MarketRegistry(deployCode("PendleV2MarketRegistry.sol", args));
     }
 

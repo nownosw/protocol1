@@ -14,17 +14,15 @@ pragma solidity >=0.6.0 <0.9.0;
 /// @title IPendleV2StandardizedYield Interface
 /// @author Enzyme Council <security@enzyme.finance>
 interface IPendleV2StandardizedYield {
-    enum AssetType {
-        TOKEN,
-        LIQUIDITY
-    }
-
-    function assetInfo() external view returns (AssetType assetType_, address assetAddress_, uint8 assetDecimals_);
-
     function deposit(address _receiver, address _tokenIn, uint256 _amountTokenToDeposit, uint256 _minSharesOut)
         external
         payable
         returns (uint256 amountSharesOut_);
+
+    function previewRedeem(address _tokenOut, uint256 _amountSharesToRedeem)
+        external
+        view
+        returns (uint256 amountTokenOut_);
 
     function redeem(
         address _receiver,
@@ -33,4 +31,6 @@ interface IPendleV2StandardizedYield {
         uint256 _minTokenOut,
         bool _burnFromInternalBalance
     ) external returns (uint256 amountTokenOut_);
+
+    function yieldToken() external view returns (address yieldTokenAddress_);
 }

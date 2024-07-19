@@ -215,12 +215,11 @@ abstract contract AssetBalanceUtils is CommonUtilsBase {
     }
 
     function isEeth(IERC20 _token) internal view returns (bool isEeth_) {
-        // Ethereum only
-        if (block.chainid != ETHEREUM_CHAIN_ID) {
+        if (block.chainid == ETHEREUM_CHAIN_ID) {
+            address(_token) == ETHEREUM_EETH;
+        } else {
             return false;
         }
-
-        return address(_token) == ETHEREUM_EETH;
     }
 
     // Lido stETH
