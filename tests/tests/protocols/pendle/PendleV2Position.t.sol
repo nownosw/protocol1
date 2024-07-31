@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.19;
 
+import {IAddressListRegistry as IAddressListRegistryProd} from
+    "contracts/persistent/address-list-registry/IAddressListRegistry.sol";
 import {IPendleV2Position as IPendleV2PositionProd} from
     "contracts/release/extensions/external-position-manager/external-positions/pendle-v2/IPendleV2Position.sol";
 import {IntegrationTest} from "tests/bases/IntegrationTest.sol";
+
 import {IERC20} from "tests/interfaces/external/IERC20.sol";
 import {IPendleV2Market} from "tests/interfaces/external/IPendleV2Market.sol";
 import {IPendleV2PrincipalToken} from "tests/interfaces/external/IPendleV2PrincipalToken.sol";
@@ -48,12 +51,14 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
 
     event LpTokenRemoved(address indexed lpToken);
 
+    uint256 internal pendleSyTokensListId;
     uint256 internal pendleV2TypeId;
     IPendleV2MarketRegistry internal pendleV2MarketRegistry;
     IPendleV2PositionLib internal pendleV2PositionLib;
     IPendleV2PositionParser internal pendleV2PositionParser;
     IPendleV2PositionLib internal pendleV2ExternalPosition;
 
+    IAddressListRegistryProd internal addressListRegistry;
     IERC20 internal underlyingAsset;
     IPendleV2Market internal market;
     IPendleV2PrincipalToken internal principalToken;
@@ -66,6 +71,7 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
 
     address internal comptrollerProxyAddress;
     address internal fundOwner;
+    address internal listOwner;
     address internal vaultProxyAddress;
     IExternalPositionManager internal externalPositionManager;
 
@@ -84,6 +90,7 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
         pendleRouter = IPendleV2Router(_pendleRouterAddress);
         market = IPendleV2Market(_pendleMarketAddress);
         pricingDuration = _pricingDuration;
+        listOwner = makeAddr("ListOwner");
 
         // Validate that the market has at least one reward token
         // @dev This can be moved to specific market setup, we just need at least one market per version with reward tokens
@@ -116,7 +123,8 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
         });
 
         // Deploy and register all Pendle V2 contracts
-        (pendleV2MarketRegistry, pendleV2PositionLib, pendleV2PositionParser, pendleV2TypeId) = deployPendleV2({
+        (pendleV2MarketRegistry, pendleV2PositionLib, pendleV2PositionParser, pendleSyTokensListId, pendleV2TypeId) =
+        deployPendleV2({
             _pendleOracleAddress: _pendleOracleAddress,
             _pendleRouterAddress: _pendleRouterAddress,
             _wrappedNativeAssetAddress: address(wrappedNativeToken)
@@ -169,15 +177,24 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
             IPendleV2MarketRegistry pendleV2MarketRegistry_,
             IPendleV2PositionLib pendleV2PositionLib_,
             IPendleV2PositionParser pendleV2PositionParser_,
+            uint256 syTokensListId_,
             uint256 typeId_
         )
     {
+        // Create a new AddressListRegistry list containing the allowed syToken
+        uint256 pendlePeggedSyTokensListId = core.persistent.addressListRegistry.createList({
+            _owner: listOwner,
+            _updateType: formatAddressListRegistryUpdateType(IAddressListRegistryProd.UpdateType.AddAndRemove),
+            _initialItems: toArray(address(syToken))
+        });
+
         pendleV2MarketRegistry_ = __deployPendleV2MarketRegistry({_pendleOracleAddress: _pendleOracleAddress});
 
         pendleV2PositionLib_ = deployPendleV2PositionLib({
             _pendleMarketRegistryAddress: address(pendleV2MarketRegistry_),
             _pendleOracleAddress: _pendleOracleAddress,
             _pendleRouterAddress: _pendleRouterAddress,
+            _pendlePeggedSyTokensListId: pendlePeggedSyTokensListId,
             _wrappedNativeAssetAddress: _wrappedNativeAssetAddress
         });
 
@@ -190,17 +207,25 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
             _parser: address(pendleV2PositionParser_)
         });
 
-        return (pendleV2MarketRegistry_, pendleV2PositionLib_, pendleV2PositionParser_, typeId_);
+        return (
+            pendleV2MarketRegistry_, pendleV2PositionLib_, pendleV2PositionParser_, pendlePeggedSyTokensListId, typeId_
+        );
     }
 
     function deployPendleV2PositionLib(
         address _pendleMarketRegistryAddress,
         address _pendleOracleAddress,
+        uint256 _pendlePeggedSyTokensListId,
         address _pendleRouterAddress,
         address _wrappedNativeAssetAddress
     ) public returns (IPendleV2PositionLib) {
         bytes memory args = abi.encode(
-            _pendleMarketRegistryAddress, _pendleOracleAddress, _pendleRouterAddress, _wrappedNativeAssetAddress
+            address(core.persistent.addressListRegistry),
+            _pendleMarketRegistryAddress,
+            _pendleOracleAddress,
+            _pendlePeggedSyTokensListId,
+            _pendleRouterAddress,
+            _wrappedNativeAssetAddress
         );
         address addr = deployCode("PendleV2PositionLib.sol", args);
         return IPendleV2PositionLib(addr);
@@ -369,6 +394,19 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
         __buyPrincipalToken({_depositTokenAddress: address(underlyingAsset)});
     }
 
+    function test_buyPrincipalToken_failsWithUnsupportedSyToken() public {
+        // Remove the SY Token from the list
+        vm.prank(listOwner);
+        core.persistent.addressListRegistry.removeFromList({
+            _id: pendleSyTokensListId,
+            _items: toArray(address(syToken))
+        });
+
+        // Should fail
+        vm.expectRevert(formatError("__validateSyToken: Unsupported SY Token"));
+        __buyPrincipalToken({_depositTokenAddress: address(underlyingAsset)});
+    }
+
     function __test_sellPrincipalToken(bool _sellAll, bool _expiredPrincipalToken) private {
         __buyPrincipalToken({_depositTokenAddress: address(underlyingAsset)});
 
@@ -515,6 +553,19 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
 
         // Should fail
         vm.expectRevert(formatError("__addLiquidity: Unsupported market"));
+        __addLiquidity();
+    }
+
+    function test_addLiquidity_failsWithUnsupportedSyToken() public {
+        // Remove the SY Token from the list
+        vm.prank(listOwner);
+        core.persistent.addressListRegistry.removeFromList({
+            _id: pendleSyTokensListId,
+            _items: toArray(address(syToken))
+        });
+
+        // Should fail
+        vm.expectRevert(formatError("__validateSyToken: Unsupported SY Token"));
         __addLiquidity();
     }
 
@@ -723,6 +774,21 @@ abstract contract PendleTestBase is IntegrationTest, PendleV2Utils {
 
         // Should fail
         vm.expectRevert("__getPrincipalTokenValue: Duration not registered");
+        pendleV2ExternalPosition.getManagedAssets();
+    }
+
+    function test_positionValue_failsWithUnsupportedSyToken() public {
+        __buyPrincipalToken({_depositTokenAddress: address(underlyingAsset)});
+
+        // Remove the SY Token from the list
+        vm.prank(listOwner);
+        core.persistent.addressListRegistry.removeFromList({
+            _id: pendleSyTokensListId,
+            _items: toArray(address(syToken))
+        });
+
+        // Should fail
+        vm.expectRevert("__validateSyToken: Unsupported SY Token");
         pendleV2ExternalPosition.getManagedAssets();
     }
 }

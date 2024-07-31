@@ -16,6 +16,7 @@ import {IPendleV2PyYtLpOracle} from "../../../../../external-interfaces/IPendleV
 import {IPendleV2Router} from "../../../../../external-interfaces/IPendleV2Router.sol";
 import {IPendleV2StandardizedYield} from "../../../../../external-interfaces/IPendleV2StandardizedYield.sol";
 import {IWETH} from "../../../../../external-interfaces/IWETH.sol";
+import {IAddressListRegistry} from "../../../../../persistent/address-list-registry/IAddressListRegistry.sol";
 import {IExternalPositionProxy} from "../../../../../persistent/external-positions/IExternalPositionProxy.sol";
 import {AddressArrayLib} from "../../../../../utils/0.8.19/AddressArrayLib.sol";
 import {AssetHelpers} from "../../../../../utils/0.8.19/AssetHelpers.sol";
@@ -50,19 +51,25 @@ contract PendleV2PositionLib is
     uint256 internal constant ORACLE_RATE_PRECISION = 1e18;
     address internal constant PENDLE_NATIVE_ASSET_ADDRESS = address(0);
 
+    IAddressListRegistry internal immutable ADDRESS_LIST_REGISTRY;
     IPendleV2MarketRegistry internal immutable PENDLE_MARKET_REGISTRY;
     IPendleV2PyYtLpOracle internal immutable PENDLE_ORACLE;
+    uint256 internal immutable PENDLE_PEGGED_SY_TOKENS_LIST_ID;
     IPendleV2Router internal immutable PENDLE_ROUTER;
     IWETH private immutable WRAPPED_NATIVE_ASSET;
 
     constructor(
+        address _addressListRegistryAddress,
         address _pendleMarketsRegistryAddress,
-        address _pendlePyYtLpOracleAddress,
+        address _pendleOracleAddress,
+        uint256 _pendlePeggedSyTokensListId,
         address _pendleRouterAddress,
         address _wrappedNativeAssetAddress
     ) {
+        ADDRESS_LIST_REGISTRY = IAddressListRegistry(_addressListRegistryAddress);
         PENDLE_MARKET_REGISTRY = IPendleV2MarketRegistry(_pendleMarketsRegistryAddress);
-        PENDLE_ORACLE = IPendleV2PyYtLpOracle(_pendlePyYtLpOracleAddress);
+        PENDLE_ORACLE = IPendleV2PyYtLpOracle(_pendleOracleAddress);
+        PENDLE_PEGGED_SY_TOKENS_LIST_ID = _pendlePeggedSyTokensListId;
         PENDLE_ROUTER = IPendleV2Router(_pendleRouterAddress);
         WRAPPED_NATIVE_ASSET = IWETH(_wrappedNativeAssetAddress);
     }
@@ -340,6 +347,8 @@ contract PendleV2PositionLib is
         uint256 _minIncomingShares,
         address _receiver
     ) private returns (uint256 syTokenAmount_) {
+        __validateSyToken({_syTokenAddress: address(_syToken)});
+
         // Deposit the underlying token into the SY token
         uint256 nativeAssetDepositValue;
         address tokenIn = __parseNativeAssetInput(_depositTokenAddress);
@@ -395,6 +404,14 @@ contract PendleV2PositionLib is
         );
     }
 
+    /// @dev Helper to validate whether a SY Token is allowed
+    function __validateSyToken(address _syTokenAddress) private view {
+        require(
+            ADDRESS_LIST_REGISTRY.isInList(PENDLE_PEGGED_SY_TOKENS_LIST_ID, _syTokenAddress),
+            "__validateSyToken: Unsupported SY Token"
+        );
+    }
+
     ////////////////////
     // POSITION VALUE //
     ////////////////////
@@ -408,6 +425,11 @@ contract PendleV2PositionLib is
     //    For more information on Pendle LP Tokens pricing, see https://docs.pendle.finance/Developers/Oracles/IntroductionOfLpOracle
     // 2. The valuation of the External Positions fully excludes accrued rewards.
     //    To prevent significant underpricing, managers should claim rewards regularly.
+    // 3. Principal Tokens and LP Tokens are priced in Pendle StandardizedYield (SY) Tokens, which are then converted to the underlying yield asset.
+    //    It is assumed that the SY Token will always be 1:1 redeemable for the underlying yield asset.
+    //    The Enzyme technical council maintains an onchain list of theses SY Tokens.
+    //    If a SY Token is held by the position but is not part of the list, pricing will revert.
+    //    For the Pendle-maintained list of pegged SY Tokens, see https://docs.pendle.finance/Developers/Contracts/StandardizedYield
 
     /// @notice Retrieves the debt assets (negative value) of the external position
     /// @return assets_ Debt assets
@@ -467,6 +489,9 @@ contract PendleV2PositionLib is
 
         // Get the underlying token address
         (IPendleV2StandardizedYield syToken,,) = IPendleV2Market(_lpTokenAddress).readTokens();
+
+        __validateSyToken({_syTokenAddress: address(syToken)});
+
         underlyingToken_ = syToken.yieldToken();
 
         // Retrieve the registered oracle duration for the market
@@ -478,10 +503,8 @@ contract PendleV2PositionLib is
 
         uint256 rate = PENDLE_ORACLE.getLpToSyRate({_market: _lpTokenAddress, _duration: duration});
 
-        value_ = syToken.previewRedeem({
-            _tokenOut: underlyingToken_,
-            _amountSharesToRedeem: (lpTokenBalance * rate / ORACLE_RATE_PRECISION)
-        });
+        // We always assume 1:1 SYToken:YieldToken redeemability
+        value_ = lpTokenBalance * rate / ORACLE_RATE_PRECISION;
 
         // If underlying is the native asset, replace with the wrapped native asset for pricing purposes
         if (underlyingToken_ == PENDLE_NATIVE_ASSET_ADDRESS) {
@@ -500,6 +523,9 @@ contract PendleV2PositionLib is
         // Get the underlying token address
         IPendleV2StandardizedYield syToken =
             IPendleV2StandardizedYield(IPendleV2PrincipalToken(_principalTokenAddress).SY());
+
+        __validateSyToken({_syTokenAddress: address(syToken)});
+
         underlyingToken_ = syToken.yieldToken();
 
         // Retrieve the registered oracle market and its duration
