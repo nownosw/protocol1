@@ -543,10 +543,8 @@ contract PendleV2PositionLib is
             })
         });
 
-        value_ = syToken.previewRedeem({
-            _tokenOut: underlyingToken_,
-            _amountSharesToRedeem: (principalTokenBalance * rate / ORACLE_RATE_PRECISION)
-        });
+        // We always assume 1:1 SYToken:YieldToken redeemability
+        value_ = principalTokenBalance * rate / ORACLE_RATE_PRECISION;
 
         // If underlying is the native asset, replace with the wrapped native asset for pricing purposes
         if (underlyingToken_ == PENDLE_NATIVE_ASSET_ADDRESS) {

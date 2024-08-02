@@ -19,11 +19,6 @@ interface IPendleV2StandardizedYield {
         payable
         returns (uint256 amountSharesOut_);
 
-    function previewRedeem(address _tokenOut, uint256 _amountSharesToRedeem)
-        external
-        view
-        returns (uint256 amountTokenOut_);
-
     function redeem(
         address _receiver,
         uint256 _amountSharesToRedeem,
