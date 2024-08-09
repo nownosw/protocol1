@@ -297,6 +297,13 @@ abstract contract IntegrationTest is CoreUtils {
     function setUpArbitrumEnvironment(uint256 _forkBlock) internal {
         vm.createSelectFork("arbitrum", _forkBlock);
 
+        // solves issue with Arbtrum fork that is not available to read L2 block number https://github.com/foundry-rs/foundry/issues/5085
+        vm.mockCall({
+            callee: address(0x64), // precompiled ArbSys address
+            data: abi.encodeWithSignature("arbBlockNumber()"),
+            returnData: abi.encode(_forkBlock)
+        });
+
         v4ReleaseContracts = getV4ArbitrumReleaseContracts();
 
         ReleaseConfig memory config = getDefaultArbitrumConfig();

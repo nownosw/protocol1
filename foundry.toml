@@ -9,6 +9,7 @@ bytecode_hash = "none"
 cbor_metadata = false
 verbosity = 3
 fs_permissions = [{ access = "read", path = "./artifacts"}]
+optimizer=true
 
 # Ignore compiler warnings that should be intentionally-skipped
 ignored_warnings_from = ["contracts/release/extensions/integration-manager/integrations/utils/0.8.19/bases/GenericWrappingAdapterBase.sol"]
@@ -32,7 +33,10 @@ remappings = [
 ]
 
 [profile.default.optimizer_details]
-yul = false
+yul = true
+
+[profile.dev]
+optimizer=false
 
 [rpc_endpoints]
 mainnet = "${ETHEREUM_NODE_MAINNET}"
