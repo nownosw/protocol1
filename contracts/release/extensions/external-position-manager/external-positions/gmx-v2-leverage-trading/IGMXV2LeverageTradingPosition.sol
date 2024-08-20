@@ -57,6 +57,7 @@ interface IGMXV2LeverageTradingPosition is IExternalPosition {
         uint256 triggerPrice;
         uint256 minOutputAmount;
         bool autoCancel;
+        uint256 executionFeeIncrease;
         address exchangeRouter;
     }
 
@@ -84,6 +85,8 @@ interface IGMXV2LeverageTradingPosition is IExternalPosition {
         external
         view
         returns (GMXV2LeverageTradingPositionLibBase1.ClaimableCollateralInfo memory info_);
+
+    function getMarketToIsCallbackContractSet(address _market) external view returns (bool isCallbackContractSet_);
 
     function getTrackedAssets() external view returns (address[] memory trackedAssets_);
 

@@ -85,6 +85,17 @@ contract GMXV2LeverageTradingPositionParser is IExternalPositionParser {
                 assetsToTransfer_[0] = WRAPPED_NATIVE_TOKEN_ADDRESS;
                 amountsToTransfer_[0] = createOrderArgs.numbers.executionFee;
             }
+        } else if (_actionId == uint256(IGMXV2LeverageTradingPosition.Actions.UpdateOrder)) {
+            IGMXV2LeverageTradingPosition.UpdateOrderActionArgs memory updateOrderArgs =
+                abi.decode(_encodedActionArgs, (IGMXV2LeverageTradingPosition.UpdateOrderActionArgs));
+
+            if (updateOrderArgs.executionFeeIncrease != 0) {
+                assetsToTransfer_ = new address[](1);
+                amountsToTransfer_ = new uint256[](1);
+
+                assetsToTransfer_[0] = WRAPPED_NATIVE_TOKEN_ADDRESS;
+                amountsToTransfer_[0] = updateOrderArgs.executionFeeIncrease;
+            }
         } else if (_actionId == uint256(IGMXV2LeverageTradingPosition.Actions.CancelOrder)) {
             IGMXV2LeverageTradingPosition.CancelOrderActionArgs memory cancelOrderArgs =
                 abi.decode(_encodedActionArgs, (IGMXV2LeverageTradingPosition.CancelOrderActionArgs));

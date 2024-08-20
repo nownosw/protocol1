@@ -50,7 +50,7 @@ uint256 constant GMX_ONE_UNIT = 10 ** 30;
 abstract contract TestBase is IntegrationTest {
     using AddressArrayLib for address[];
 
-    event CallbackContractSet(address exchangeRouter, address market);
+    event CallbackContractSet(address market);
 
     event ClaimableCollateralAdded(bytes32 claimableCollateralKey, address token, address market, uint256 timeKey);
 
@@ -629,7 +629,7 @@ abstract contract TestBase is IntegrationTest {
             if (isWrappedNativeToken) {
                 assertEq(
                     postExecuteOrderManagedAssetAmounts[i],
-                    postCreateOrderManagedAssetAmounts[i] + executionFee,
+                    postCreateOrderManagedAssetAmounts[i],
                     "Incorrect managedAssetAmount wrapped native post execute order"
                 );
                 if (isCollateralToken) {
@@ -694,7 +694,7 @@ abstract contract TestBase is IntegrationTest {
         IGMXV2Market.Props memory marketInfo = __getMarketInfo(_market);
 
         expectEmit(address(externalPosition));
-        emit CallbackContractSet({exchangeRouter: address(exchangeRouter), market: _market});
+        emit CallbackContractSet(_market);
 
         address[] memory trackedAssetsToAdd;
         trackedAssetsToAdd = trackedAssetsToAdd.addItem(marketInfo.longToken);
@@ -738,6 +738,8 @@ abstract contract TestBase is IntegrationTest {
             _assets: new address[](0)
         });
 
+        assertEq(externalPosition.getMarketToIsCallbackContractSet(_market), true, "Incorrect market callback contract");
+
         bool isCollateralWrappedNativeToken = _initialCollateralToken == address(wrappedNativeToken);
 
         // assert that position value takes into account pending market increase order
@@ -750,15 +752,17 @@ abstract contract TestBase is IntegrationTest {
         assertEq(externalPosition.getTrackedMarkets(), toArray(_market), "Incorrect tracked markets");
 
         assertEq(
-            postCreateOrderManagedAssets, toArray(_initialCollateralToken), "Incorrect managedAssets post order create"
+            postCreateOrderManagedAssets,
+            isCollateralWrappedNativeToken
+                ? toArray(_initialCollateralToken)
+                : toArray(_initialCollateralToken, address(wrappedNativeToken)),
+            "Incorrect managedAssets post order create"
         );
         assertEq(
             postCreateOrderManagedAssetAmounts,
-            toArray(
-                isCollateralWrappedNativeToken
-                    ? _initialCollateralDeltaAmount - executionFee
-                    : _initialCollateralDeltaAmount
-            ),
+            isCollateralWrappedNativeToken
+                ? toArray(_initialCollateralDeltaAmount)
+                : toArray(_initialCollateralDeltaAmount, executionFee),
             "Incorrect managedAssetAmounts post order create"
         );
 
@@ -874,6 +878,10 @@ abstract contract TestBase is IntegrationTest {
             _orderType: IGMXV2OrderProd.OrderType.LimitDecrease
         });
 
+        increaseTokenBalance({_token: wrappedNativeToken, _to: vaultProxyAddress, _amount: executionFee});
+
+        uint256 vaultWrappedNativeTokenBalancePreUpdateOrder = IERC20(wrappedNativeToken).balanceOf(vaultProxyAddress);
+
         bytes32 orderKey = __getLastOrderKey();
 
         IGMXV2LeverageTradingPositionProd.UpdateOrderActionArgs memory updateParams = IGMXV2LeverageTradingPositionProd
@@ -884,7 +892,8 @@ abstract contract TestBase is IntegrationTest {
             triggerPrice: oldTriggerPrice - 1,
             minOutputAmount: oldMinOutputAmount + 1,
             exchangeRouter: address(exchangeRouter),
-            autoCancel: !oldAutoCancel
+            autoCancel: !oldAutoCancel,
+            executionFeeIncrease: executionFee
         });
 
         vm.recordLogs();
@@ -910,6 +919,14 @@ abstract contract TestBase is IntegrationTest {
             order.numbers.minOutputAmount, updateParams.minOutputAmount, "Incorrect minOutputAmount post update order"
         );
         assertEq(order.flags.autoCancel, updateParams.autoCancel, "Incorrect autoCancel post update order");
+
+        // assert that execution fee was transferred, and increased
+        assertEq(
+            IERC20(wrappedNativeToken).balanceOf(vaultProxyAddress),
+            vaultWrappedNativeTokenBalancePreUpdateOrder - executionFee,
+            "Incorrect wrappedNativeToken balance post update order"
+        );
+        assertEq(order.numbers.executionFee, executionFee + executionFee, "Incorrect executionFee post update order");
     }
 
     function __test_cancelDecreaseOrder_success(
@@ -967,7 +984,7 @@ abstract contract TestBase is IntegrationTest {
             if (postCancelOrderManagedAssets[i] == address(wrappedNativeToken)) {
                 assertEq(
                     postCancelOrderManagedAssetAmounts[i],
-                    preCancelOrderWrappedNativeTokenBalance - externalPositionNativeBalance,
+                    preCancelOrderWrappedNativeTokenBalance - externalPositionNativeBalance - executionFee,
                     "Incorrect wrapped native managedAssetAmount post cancel order"
                 );
             }
@@ -2106,7 +2123,7 @@ contract GMXV2LeverageTradingPositionArbitrumTest is GMXV2LeverageTradingPositio
             if (managedAssets[i] == ARBITRUM_WETH) {
                 assertEq(
                     managedAssetAmounts[i],
-                    pendingIncreaseOrderInitialCollateralDeltaAmount - executionFee,
+                    pendingIncreaseOrderInitialCollateralDeltaAmount,
                     "Incorrect WETH token EP balance post sweep"
                 );
             }

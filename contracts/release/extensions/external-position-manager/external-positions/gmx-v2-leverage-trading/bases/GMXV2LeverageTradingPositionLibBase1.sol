@@ -19,7 +19,7 @@ pragma solidity 0.8.19;
 /// a numbered GMXV2LeverageTradingPositionLibBaseXXX that inherits the previous base.
 /// e.g., `GMXV2LeverageTradingPositionLibBase2 is GMXV2LeverageTradingPositionLibBase1`
 abstract contract GMXV2LeverageTradingPositionLibBase1 {
-    event CallbackContractSet(address exchangeRouter, address market);
+    event CallbackContractSet(address market);
 
     event ClaimableCollateralAdded(bytes32 claimableCollateralKey, address token, address market, uint256 timeKey);
 
@@ -34,7 +34,7 @@ abstract contract GMXV2LeverageTradingPositionLibBase1 {
     event TrackedMarketRemoved(address market);
 
     /// @dev Keeps track of whether a particular market has been assigned the callback contract (i.e. the EP)
-    mapping(address => mapping(address => bool)) internal exchangeRouterToMarketToIsCallbackContractSet;
+    mapping(address => bool) internal marketToIsCallbackContractSet;
 
     /// @dev Tracked assets that are receivable by the EP through actions that are triggered externally (e.g. order cancellations/liquidations)
     address[] internal trackedAssets;

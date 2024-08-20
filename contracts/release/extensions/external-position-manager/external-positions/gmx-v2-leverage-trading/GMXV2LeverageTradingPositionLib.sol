@@ -241,6 +241,13 @@ contract GMXV2LeverageTradingPositionLib is
         IGMXV2LeverageTradingPosition.UpdateOrderActionArgs memory updateOrderArgs =
             abi.decode(_actionArgs, (IGMXV2LeverageTradingPosition.UpdateOrderActionArgs));
 
+        if (updateOrderArgs.executionFeeIncrease != 0) {
+            IERC20(address(WRAPPED_NATIVE_TOKEN)).safeTransfer({
+                _to: __getOrderVaultAddress(updateOrderArgs.exchangeRouter),
+                _value: updateOrderArgs.executionFeeIncrease
+            });
+        }
+
         IGMXV2ExchangeRouter(updateOrderArgs.exchangeRouter).updateOrder({
             _key: updateOrderArgs.key,
             _sizeDeltaUsd: updateOrderArgs.sizeDeltaUsd,
@@ -365,8 +372,10 @@ contract GMXV2LeverageTradingPositionLib is
             uint256 claimableCollateral = DATA_STORE.getUint(claimableCollateralAmountKey);
             uint256 claimedCollateral = DATA_STORE.getUint(claimedCollateralAmountKey);
 
-            // check if all the collateral was claimed
-            if (claimableCollateral - claimedCollateral == 0) {
+            // Check if all the collateral was claimed.
+            // In GMX, MarketUtils.claimCollateral() computes the amount of collateral that can be claimed by an account for a market. As the claimable collateral can be released over time, a claimableFactor exists to determine the amount of collateral that can be claimed at a given time.
+            // An additional check is then performed that adjustedClaimableAmount > claimedAmount. Therefore, GMX remains conservative by handling the unlikely case where the claimed collateral amount exceeds the claimable collateral amount, and we do the same here.
+            if (claimableCollateral <= claimedCollateral) {
                 // even if the key won't be removed, because callback that adds collateral key wasn't called (due to for example out of gas error), this code won't revert
                 delete claimableCollateralKeyToClaimableCollateralInfo[claimableCollateralAmountKey];
                 bool removed = claimableCollateralKeys.removeStorageItem(claimableCollateralAmountKey);
@@ -468,15 +477,15 @@ contract GMXV2LeverageTradingPositionLib is
 
     /// @dev Helper to set the saved callback contract on the GMX ExchangeRouter, it will be called on liquidations and auto deleveraging
     function __setSavedCallbackContract(address _exchangeRouter, address _market) private {
-        if (!exchangeRouterToMarketToIsCallbackContractSet[_exchangeRouter][_market]) {
+        if (!marketToIsCallbackContractSet[_market]) {
             IGMXV2ExchangeRouter(_exchangeRouter).setSavedCallbackContract({
                 _market: _market,
                 _callbackContract: address(this)
             });
 
-            exchangeRouterToMarketToIsCallbackContractSet[_exchangeRouter][_market] = true;
+            marketToIsCallbackContractSet[_market] = true;
 
-            emit CallbackContractSet({exchangeRouter: _exchangeRouter, market: _market});
+            emit CallbackContractSet(_market);
         }
     }
 
@@ -494,6 +503,11 @@ contract GMXV2LeverageTradingPositionLib is
     /// @dev Helper to add claimable collateral to storage
     function __addClaimableCollateral(address _market, address _token, uint256 _timeKey) private {
         bytes32 key = __claimableCollateralAmountKey({_market: _market, _token: _token, _timeKey: _timeKey});
+
+        // skip if the claimable collateral key already exists
+        if (claimableCollateralKeyToClaimableCollateralInfo[key].market != address(0)) {
+            return;
+        }
 
         claimableCollateralKeys.push(key);
         claimableCollateralKeyToClaimableCollateralInfo[key] =
@@ -643,13 +657,13 @@ contract GMXV2LeverageTradingPositionLib is
     /// @return assets_ Managed assets
     /// @return amounts_ Managed asset amounts
     /// @dev There are 5 ways that positive value can be contributed to this position
-    /// 1. Collateral in the GMX positions
-    /// 2. Pending market increase orders
+    /// 1. Collateral in the GMX positions, taking into account price impact and profit/loss
+    /// 2. Pending orders: deposited collateral in market increase orders, plus execution fees of all orders
     /// 3. Assets held by the External Position. Those assets are monitored via the trackedAssets variable
-    /// 4. Collateral that can be claimed from GMX positions where collateral was freed up from decreased positions.
+    /// 4. Collateral that eventually can be claimed from GMX positions where collateral was freed up from decreased positions.
     /// 5. Funding fees that can be claimed from the GMX protocol
     function getManagedAssets() external view override returns (address[] memory assets_, uint256[] memory amounts_) {
-        // 1. Get the value of the collateral in active GMX positions
+        // 1. Get the value of the collateral in active GMX positions, taking into account price impact and profit/loss
 
         bytes32[] memory positionsKeys = DATA_STORE.getBytes32ValuesAt({
             _setKey: keccak256(abi.encode(ACCOUNT_POSITION_LIST_DATA_STORE_KEY, address(this))),
@@ -721,15 +735,25 @@ contract GMXV2LeverageTradingPositionLib is
             }
         }
 
-        // 2. Get pending market increase orders value
+        // 2. Get pending orders: deposited collateral in market increase orders, plus execution fees of all orders
         IGMXV2Order.Props[] memory orders = __getAccountOrders();
+
+        uint256 totalExecutionFee;
 
         for (uint256 i; i < orders.length; i++) {
             IGMXV2Order.Props memory order = orders[i];
+
             if (order.numbers.orderType == IGMXV2Order.OrderType.MarketIncrease) {
                 assets_ = assets_.addItem(order.addresses.initialCollateralToken);
                 amounts_ = amounts_.addItem(order.numbers.initialCollateralDeltaAmount);
             }
+
+            totalExecutionFee += order.numbers.executionFee;
+        }
+
+        if (totalExecutionFee != 0) {
+            assets_ = assets_.addItem(address(WRAPPED_NATIVE_TOKEN));
+            amounts_ = amounts_.addItem(totalExecutionFee);
         }
 
         // 3. Get the value of the assets held by the External Position. Those assets could be here because of the: liquidations, order cancellation, or refund of the execution fee
@@ -749,7 +773,7 @@ contract GMXV2LeverageTradingPositionLib is
             assets_ = assets_.addItem(address(WRAPPED_NATIVE_TOKEN));
         }
 
-        // 4. Get the value of the collateral that can be claimed from GMX positions where collateral was freed up from decreased positions.
+        // 4. Get the value of the collateral that eventually can be claimed from GMX positions where collateral was freed up from decreased positions.
         for (uint256 i; i < claimableCollateralKeys.length; i++) {
             bytes32 key = claimableCollateralKeys[i];
 
@@ -814,6 +838,13 @@ contract GMXV2LeverageTradingPositionLib is
         returns (ClaimableCollateralInfo memory info_)
     {
         return claimableCollateralKeyToClaimableCollateralInfo[_key];
+    }
+
+    /// @notice Retrieves the status of whether the callback contract is set for a given market.
+    /// @param _market The address of the market to check.
+    /// @return isCallbackContractSet_ A boolean value indicating if the callback contract is set for the specified market.
+    function getMarketToIsCallbackContractSet(address _market) public view returns (bool isCallbackContractSet_) {
+        return marketToIsCallbackContractSet[_market];
     }
 
     /// @notice Retrieves the tracked assets
