@@ -169,7 +169,7 @@ abstract contract IntegrationTest is CoreUtils {
     }
 
     function setUpMainnetEnvironment(uint256 _forkBlock) internal {
-        vm.createSelectFork("mainnet", _forkBlock);
+        vm.createSelectFork({urlOrAlias: "mainnet", blockNumber: _forkBlock});
 
         v4ReleaseContracts = getV4MainnetReleaseContracts();
 

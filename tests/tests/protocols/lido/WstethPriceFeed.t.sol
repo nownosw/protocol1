@@ -43,7 +43,7 @@ abstract contract WstethPriceFeedTestBase is IntegrationTest {
             _valueInterpreter: IValueInterpreter(getValueInterpreterAddressForVersion(version)),
             _tokenAddress: ETHEREUM_STETH,
             _skipIfRegistered: true,
-            _aggregatorAddress: ETHEREUM_STEH_ETH_AGGREGATOR,
+            _aggregatorAddress: ETHEREUM_STETH_ETH_AGGREGATOR,
             _rateAsset: IChainlinkPriceFeedMixinProd.RateAsset.ETH
         });
         addDerivative({
